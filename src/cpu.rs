@@ -181,6 +181,10 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x39 => self.add_39(),
+                    0x29 => self.add_29(),
+                    0x19 => self.add_19(),
+                    0x09 => self.add_09(),
                     0x35 => self.dec_35(),
                     0x2D => self.dec_2D(),
                     0x25 => self.dec_25(),
@@ -446,6 +450,69 @@ impl Cpu {
     }
 
     // #region inst
+    #[allow(dead_code)]
+    fn add_39(&mut self) -> Result<u8> {
+        let left = self.get_hl();
+        let right = self.SP;
+        let val = left.wrapping_add(right);
+
+        self.set_hl(val);
+
+        let z: bool = self.get_zero_flag();
+        let n: bool = false;
+        let (h, c) = self.is_carry_positive_16(left, right);
+
+        self.set_flag(z, n, h, c);
+        Ok(8)
+    }
+
+    fn add_29(&mut self) -> Result<u8> {
+        let left = self.get_hl();
+        let right = self.get_hl();
+        let val = left.wrapping_add(right);
+
+        self.set_hl(val);
+
+        let z: bool = self.get_zero_flag();
+        let n: bool = false;
+        let (h, c) = self.is_carry_positive_16(left, right);
+
+        self.set_flag(z, n, h, c);
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn add_19(&mut self) -> Result<u8> {
+        let left = self.get_hl();
+        let right = self.get_de();
+        let val = left.wrapping_add(right);
+
+        self.set_hl(val);
+
+        let z: bool = self.get_zero_flag();
+        let n: bool = false;
+        let (h, c) = self.is_carry_positive_16(left, right);
+
+        self.set_flag(z, n, h, c);
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn add_09(&mut self) -> Result<u8> {
+        let left = self.get_hl();
+        let right = self.get_bc();
+        let val = left.wrapping_add(right);
+
+        self.set_hl(val);
+
+        let z: bool = self.get_zero_flag();
+        let n: bool = false;
+        let (h, c) = self.is_carry_positive_16(left, right);
+
+        self.set_flag(z, n, h, c);
+        Ok(8)
+    }
+
     #[allow(dead_code)]
     fn dec_35(&mut self) -> Result<u8> {
         let address = self.get_hl();
