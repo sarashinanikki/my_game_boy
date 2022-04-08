@@ -181,6 +181,7 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0xE8 => self.add_E8(),
                     0x39 => self.add_39(),
                     0x29 => self.add_29(),
                     0x19 => self.add_19(),
@@ -451,6 +452,22 @@ impl Cpu {
 
     // #region inst
     #[allow(dead_code)]
+    fn add_E8(&mut self) -> Result<u8> {
+        let left = self.SP;
+        let right = self.read_next_8()? as u16;
+        let val = left.wrapping_add(right);
+
+        self.SP = val;
+
+        let z: bool = false;
+        let n: bool = false;
+        let (h, c) = self.is_carry_positive_16(left, right);
+
+        self.set_flag(z, n, h, c);
+        Ok(16)
+    }
+
+    #[allow(dead_code)]
     fn add_39(&mut self) -> Result<u8> {
         let left = self.get_hl();
         let right = self.SP;
@@ -466,6 +483,7 @@ impl Cpu {
         Ok(8)
     }
 
+    #[allow(dead_code)]
     fn add_29(&mut self) -> Result<u8> {
         let left = self.get_hl();
         let right = self.get_hl();
