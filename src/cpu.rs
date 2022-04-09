@@ -478,7 +478,7 @@ impl Cpu {
         return (self.F & (1 << 7)) == 1 << 7;
     }
 
-    // #region inst
+    // region: inst
     #[allow(dead_code)]
     fn dec_3B(&mut self) -> Result<u8> {
         self.decrement_sp();
@@ -2865,6 +2865,5 @@ impl Cpu {
         Ok(8)
     }
 
-
-    // #endregion
+    // endregion: inst
 }
