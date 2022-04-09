@@ -201,6 +201,10 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x3B => self.dec_3B(),
+                    0x2B => self.dec_2B(),
+                    0x1B => self.dec_1B(),
+                    0x0B => self.dec_0B(),
                     0x33 => self.inc_33(),
                     0x23 => self.inc_23(),
                     0x13 => self.inc_13(),
@@ -475,6 +479,30 @@ impl Cpu {
     }
 
     // #region inst
+    #[allow(dead_code)]
+    fn dec_3B(&mut self) -> Result<u8> {
+        self.decrement_sp();
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn dec_2B(&mut self) -> Result<u8> {
+        self.decrement_hl();
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn dec_1B(&mut self) -> Result<u8> {
+        self.decrement_de();
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn dec_0B(&mut self) -> Result<u8> {
+        self.decrement_bc();
+        Ok(8)
+    }
+
     #[allow(dead_code)]
     fn inc_33(&mut self) -> Result<u8> {
         self.increment_sp();
