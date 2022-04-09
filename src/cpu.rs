@@ -115,6 +115,26 @@ impl Cpu {
         self.set_hl(hl.wrapping_add(1));
     }
 
+    fn increment_bc(&mut self) {
+        let bc = self.get_bc();
+        self.set_bc(bc.wrapping_add(1));
+    }
+
+    fn decrement_bc(&mut self) {
+        let bc = self.get_bc();
+        self.set_bc(bc.wrapping_sub(1));
+    }
+
+    fn increment_de(&mut self) {
+        let de = self.get_de();
+        self.set_de(de.wrapping_add(1));
+    }
+
+    fn decrement_de(&mut self) {
+        let de = self.get_de();
+        self.set_de(de.wrapping_sub(1));
+    }
+
     fn get_af(&self) -> u16 {
         let a: u16 = self.A as u16;
         let f: u16 = self.F as u16;
@@ -181,6 +201,10 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x33 => self.inc_33(),
+                    0x23 => self.inc_23(),
+                    0x13 => self.inc_13(),
+                    0x03 => self.inc_03(),
                     0xE8 => self.add_E8(),
                     0x39 => self.add_39(),
                     0x29 => self.add_29(),
@@ -451,6 +475,30 @@ impl Cpu {
     }
 
     // #region inst
+    #[allow(dead_code)]
+    fn inc_33(&mut self) -> Result<u8> {
+        self.increment_sp();
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn inc_23(&mut self) -> Result<u8> {
+        self.increment_hl();
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn inc_13(&mut self) -> Result<u8> {
+        self.increment_de();
+        Ok(8)
+    }
+
+    #[allow(dead_code)]
+    fn inc_03(&mut self) -> Result<u8> {
+        self.increment_bc();
+        Ok(8)
+    }
+
     #[allow(dead_code)]
     fn add_E8(&mut self) -> Result<u8> {
         let left = self.SP;
