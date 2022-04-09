@@ -406,6 +406,7 @@ impl Cpu {
             Opcode { cb_prefix: true, code: res } => {
                 match res {
                     06 => Ok(0),
+                    0x30..=0x37 => self.swap_CB(res),
                     _ => Ok(0)
                 }
             }
@@ -478,7 +479,72 @@ impl Cpu {
         return (self.F & (1 << 7)) == 1 << 7;
     }
 
+    fn swap_8bit(&self, target: u8) -> u8 {
+        let upper: u8 = target & 0xF0;
+        let lower: u8 = target & 0x0F;
+
+        let new_value: u8 = (lower << 4) + upper;
+        return new_value;
+    }
+
+    fn swap_16bit(&self, target: u16) -> u16 {
+        let upper: u16 = target & 0xFF00;
+        let lower: u16 = target & 0x00FF;
+
+        let new_value: u16 = (lower << 8) + upper;
+        return new_value;
+    }
+
+    // (レジスタの値, u8にキャストするかどうか)を返す
+    fn opcode_to_registers(&self, opcode: &u8) -> (u16, bool) {
+        let lower = opcode & 0x0F;
+        let ret: (u16, bool) = match lower {
+            0x07 => (self.A as u16, true),
+            0x00 => (self.B as u16, true),
+            0x01 => (self.C as u16, true),
+            0x02 => (self.D as u16, true),
+            0x03 => (self.E as u16, true),
+            0x04 => (self.H as u16, true),
+            0x05 => (self.L as u16, true),
+            0x06 => (self.get_hl(), false),
+            0x0F => (self.A as u16, true),
+            0x08 => (self.B as u16, true),
+            0x09 => (self.C as u16, true),
+            0x0A => (self.D as u16, true),
+            0x0B => (self.E as u16, true),
+            0x0C => (self.H as u16, true),
+            0x0D => (self.L as u16, true),
+            0x0E => (self.get_hl(), false),
+            _ => (0, false)
+        };
+        return ret;
+    }
+
     // region: inst
+    #[allow(dead_code)]
+    fn swap_CB(&mut self, opcode: &u8) -> Result<u8> {
+        let (register_val, is_cast) = self.opcode_to_registers(opcode);
+        let mut cycle: u8 = 8;
+
+        if is_cast {
+            let target = register_val as u8;
+            let swaped_val = self.swap_8bit(target);
+            let z: bool = swaped_val == 0;
+            let (n, h, c) = (false, false, false);
+            self.set_flag(z, n, h, c);
+        }
+        else {
+            let target = register_val;
+            let swaped_val = self.swap_16bit(target);
+            let z: bool = swaped_val == 0;
+            let (n, h, c) = (false, false, false);
+            self.set_flag(z, n, h, c);
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
     #[allow(dead_code)]
     fn dec_3B(&mut self) -> Result<u8> {
         self.decrement_sp();
