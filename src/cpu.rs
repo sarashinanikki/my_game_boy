@@ -201,6 +201,7 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x27 => self.decimal_adjust_accumlator(),
                     0x3B => self.dec_3B(),
                     0x2B => self.dec_2B(),
                     0x1B => self.dec_1B(),
@@ -475,8 +476,16 @@ impl Cpu {
         return (self.F & (1 << 4)) == 1 << 4;
     }
 
+    fn get_half_carry_flag(&self) -> bool {
+        return (self.F & (1 << 5)) == 1 << 5;
+    }
+
     fn get_zero_flag(&self) -> bool {
         return (self.F & (1 << 7)) == 1 << 7;
+    }
+
+    fn get_n_flag(&self) -> bool {
+        return (self.F & (1 << 6)) == 1 << 6;
     }
 
     fn swap_8bit(&self, target: u8) -> u8 {
@@ -521,6 +530,40 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn decimal_adjust_accumlator(&mut self) -> Result<u8> {
+        let mut val = self.A;
+        let n_flag = self.get_n_flag();
+        let c_flag = self.get_carry_flag();
+        let h_flag = self.get_half_carry_flag();
+
+        let mut c_new_flag = false;
+
+        if !n_flag {
+            if c_flag || self.A > 0x99 {
+                val = val.wrapping_add(0x60);
+                c_new_flag = true;
+            }
+            if h_flag || (self.A & 0x0F) > 0x09 {
+                val = val.wrapping_add(0x06);
+            }
+        }
+        else {
+            if c_flag {
+                val = val.wrapping_sub(0x60);
+            }
+            if h_flag {
+                val = val.wrapping_sub(0x06);
+            }
+        }
+
+        self.A = val;
+        let z_new_flag = self.A == 0;
+        self.set_flag(z_new_flag, n_flag, false, c_new_flag);
+
+        Ok(4)
+    }
+
     #[allow(dead_code)]
     fn swap_CB(&mut self, opcode: &u8) -> Result<u8> {
         let (register_val, is_cast) = self.opcode_to_registers(opcode);
