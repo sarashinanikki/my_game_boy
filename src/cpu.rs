@@ -12,7 +12,8 @@ pub struct Cpu {
     L: u8,
     SP: u16,
     PC: u16,
-    bus: Bus
+    bus: Bus,
+    halt: bool
 }
 
 #[derive(Default)]
@@ -34,11 +35,14 @@ impl Cpu {
             L: Default::default(),
             SP: Default::default(),
             PC: 0x100,
-            bus
+            bus,
+            halt: Default::default()
         }
     }
 
     // メインループ
+    // HALTを有効にしたり割り込みをさせたりするためには、ここにメインループを書くのは筋が悪そうということが分かった
+    // TODO: 他を書く段階でmainに移す
     pub fn run(&mut self) -> Result<()> {
         loop {
             let max_cycle: usize = 70000;
@@ -201,6 +205,7 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x76 => self.halt(),
                     0x00 => self.nop(),
                     0x37 => self.scf(),
                     0x3F => self.ccf(),
@@ -534,6 +539,12 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn halt(&mut self) -> Result<u8> {
+        self.halt = true;
+        Ok(4)
+    }
+
     #[allow(dead_code)]
     fn nop(&mut self) -> Result<u8> {
         Ok(4)
