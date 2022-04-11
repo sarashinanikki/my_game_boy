@@ -207,6 +207,8 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x1F => self.rra(),
+                    0x0F => self.rrca(),
                     0x17 => self.rla(),
                     0x07 => self.rlca(),
                     0xFB => self.ei(),
@@ -546,6 +548,36 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn rra(&mut self) -> Result<u8> {
+        let c = self.get_carry_flag();
+        let c_new_flag = (self.A & (1 << 0)) == 1 << 0;
+
+        let mut old_val = self.A;
+        if c != c_new_flag {
+            old_val = self.A ^ (1 << 0);
+        }
+
+        let val = old_val.rotate_right(1);
+        self.A = val;
+
+        let z = val == 0;
+        self.set_flag(z, false, false, c_new_flag);
+
+        Ok(4)
+    }
+
+    #[allow(dead_code)]
+    fn rrca(&mut self) -> Result<u8> {
+        let c = (self.A & (1 << 0)) == 1 << 0;
+        let val = self.A.rotate_right(1);
+        self.A = val;
+        let z = val == 0;
+        self.set_flag(z, false, false, c);
+
+        Ok(4)
+    }
+
     #[allow(dead_code)]
     fn rla(&mut self) -> Result<u8> {
         let c = self.get_carry_flag();
