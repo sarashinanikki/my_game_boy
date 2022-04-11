@@ -205,6 +205,7 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x10 => self.stop(),
                     0x76 => self.halt(),
                     0x00 => self.nop(),
                     0x37 => self.scf(),
@@ -539,6 +540,13 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn stop(&mut self) -> Result<u8> {
+        self.halt = true;
+        // TODO: LCDディスプレイも止める実装をする
+        Ok(4)
+    }
+
     #[allow(dead_code)]
     fn halt(&mut self) -> Result<u8> {
         self.halt = true;
