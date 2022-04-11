@@ -426,6 +426,7 @@ impl Cpu {
                 match res {
                     06 => Ok(0),
                     0x00..=0x07 => self.rlc_CB(res),
+                    0x10..=0x17 => self.rl_CB(res),
                     0x30..=0x37 => self.swap_CB(res),
                     _ => Ok(0)
                 }
@@ -555,6 +556,47 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn rl_CB(&mut self, opcode: &u8) -> Result<u8> {
+        let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
+        let mut cycle: u8 = 8;
+
+        if is_cast {
+            let target = register_val as u8;
+            let c = self.get_carry_flag();
+            let c_new_flag = (target & (1 << 7)) == 1 << 7;
+    
+            let mut old_val = target;
+            if c != c_new_flag {
+                old_val = target ^ (1 << 7);
+            }
+            let val = old_val.rotate_left(1);
+            
+            self.opcode_to_write_registers(opcode, val);
+            let z = val == 0;
+            self.set_flag(z, false, false, c_new_flag);
+        }
+        else {
+            let address = register_val;
+            let target = self.bus.read(address)?;
+            let c = self.get_carry_flag();
+            let c_new_flag = (target & (1 << 7)) == 1 << 7;
+    
+            let mut old_val = target;
+            if c != c_new_flag {
+                old_val = target ^ (1 << 7);
+            }
+            let val = old_val.rotate_left(1);
+            
+            self.bus.write(address, val)?;
+            let z = val == 0;
+            self.set_flag(z, false, false, c_new_flag);
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
     #[allow(dead_code)]
     fn rlc_CB(&mut self, opcode: &u8) -> Result<u8> {
         let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
