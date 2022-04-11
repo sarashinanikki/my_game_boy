@@ -13,7 +13,8 @@ pub struct Cpu {
     SP: u16,
     PC: u16,
     bus: Bus,
-    halt: bool
+    halt: bool,
+    interruption: bool
 }
 
 #[derive(Default)]
@@ -36,7 +37,8 @@ impl Cpu {
             SP: Default::default(),
             PC: 0x100,
             bus,
-            halt: Default::default()
+            halt: Default::default(),
+            interruption: Default::default()
         }
     }
 
@@ -205,6 +207,8 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0xFB => self.ei(),
+                    0xF3 => self.di(),
                     0x10 => self.stop(),
                     0x76 => self.halt(),
                     0x00 => self.nop(),
@@ -540,6 +544,18 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn ei(&mut self) -> Result<u8> {
+        self.interruption = true;
+        Ok(4)
+    }
+    
+    #[allow(dead_code)]
+    fn di(&mut self) -> Result<u8> {
+        self.interruption = false;
+        Ok(4)
+    }
+
     #[allow(dead_code)]
     fn stop(&mut self) -> Result<u8> {
         self.halt = true;
