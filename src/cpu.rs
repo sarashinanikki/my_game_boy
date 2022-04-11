@@ -430,7 +430,9 @@ impl Cpu {
                     0x10..=0x17 => self.rl_CB(res),
                     0x18..=0x1F => self.rr_CB(res),
                     0x20..=0x27 => self.sla_CB(res),
+                    0x28..=0x2F => self.sra_CB(res),
                     0x30..=0x37 => self.swap_CB(res),
+                    0x38..=0x3F => self.srl_CB(res),
                     _ => Ok(0)
                 }
             }
@@ -559,6 +561,76 @@ impl Cpu {
     }
 
     // region: inst
+    // 論理シフト
+    #[allow(dead_code)]
+    fn srl_CB(&mut self, opcode: &u8) -> Result<u8> {
+        let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
+        let mut cycle: u8 = 8;
+
+        if is_cast {
+            let target = register_val as u8;
+            let c = (target & (1 << 0)) == 1 << 0;
+            let val = target >> 1;
+            
+            self.opcode_to_write_registers(opcode, val);
+            let z = val == 0;
+            self.set_flag(z, false, false, c);
+        }
+        else {
+            let address = register_val;
+            let target = self.bus.read(address)?;
+            let c = (target & (1 << 0)) == 1 << 0;
+            let val = target >> 1;
+
+            self.bus.write(address, val)?;
+            let z = val == 0;
+            self.set_flag(z, false, false, c);
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
+    // 算術シフト
+    #[allow(dead_code)]
+    fn sra_CB(&mut self, opcode: &u8) -> Result<u8> {
+        let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
+        let mut cycle: u8 = 8;
+
+        if is_cast {
+            let target = register_val as u8;
+            let c = (target & (1 << 0)) == 1 << 0;
+            let msb = (target & (1 << 7)) == 1 << 7;
+            let mut val = target >> 1;
+            
+            if msb {
+                val |= 1 << 7;
+            }
+            
+            self.opcode_to_write_registers(opcode, val);
+            let z = val == 0;
+            self.set_flag(z, false, false, c);
+        }
+        else {
+            let address = register_val;
+            let target = self.bus.read(address)?;
+            let c = (target & (1 << 0)) == 1 << 0;
+            let msb = (target & (1 << 7)) == 1 << 7;
+            let mut val = target >> 1;
+
+            if msb {
+                val |= 1 << 7;
+            }
+            
+            self.bus.write(address, val)?;
+            let z = val == 0;
+            self.set_flag(z, false, false, c);
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
     #[allow(dead_code)]
     fn sla_CB(&mut self, opcode: &u8) -> Result<u8> {
         let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
