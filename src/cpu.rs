@@ -425,6 +425,7 @@ impl Cpu {
             Opcode { cb_prefix: true, code: res } => {
                 match res {
                     06 => Ok(0),
+                    0x00..=0x07 => self.rlc_CB(res),
                     0x30..=0x37 => self.swap_CB(res),
                     _ => Ok(0)
                 }
@@ -523,31 +524,66 @@ impl Cpu {
     }
 
     // (レジスタの値, u8にキャストするかどうか)を返す
-    fn opcode_to_registers(&self, opcode: &u8) -> (u16, bool) {
+    fn opcode_to_read_registers(&self, opcode: &u8) -> (u16, bool) {
         let lower = opcode & 0x0F;
         let ret: (u16, bool) = match lower {
-            0x07 => (self.A as u16, true),
-            0x00 => (self.B as u16, true),
-            0x01 => (self.C as u16, true),
-            0x02 => (self.D as u16, true),
-            0x03 => (self.E as u16, true),
-            0x04 => (self.H as u16, true),
-            0x05 => (self.L as u16, true),
-            0x06 => (self.get_hl(), false),
-            0x0F => (self.A as u16, true),
-            0x08 => (self.B as u16, true),
-            0x09 => (self.C as u16, true),
-            0x0A => (self.D as u16, true),
-            0x0B => (self.E as u16, true),
-            0x0C => (self.H as u16, true),
-            0x0D => (self.L as u16, true),
-            0x0E => (self.get_hl(), false),
+            0x07 | 0x0F => (self.A as u16, true),
+            0x00 | 0x08 => (self.B as u16, true),
+            0x01 | 0x09 => (self.C as u16, true),
+            0x02 | 0x0A => (self.D as u16, true),
+            0x03 | 0x0B => (self.E as u16, true),
+            0x04 | 0x0C => (self.H as u16, true),
+            0x05 | 0x0D => (self.L as u16, true),
+            0x06 | 0x0E => (self.get_hl(), false),
             _ => (0, false)
         };
         return ret;
     }
 
+    fn opcode_to_write_registers(&mut self, opcode: &u8, data: u8) {
+        let lower = opcode & 0x0F;
+        match lower {
+            0x07 | 0x0F => self.A = data,
+            0x00 | 0x08 => self.B = data,
+            0x01 | 0x09 => self.C = data,
+            0x02 | 0x0A => self.D = data,
+            0x03 | 0x0B => self.E = data,
+            0x04 | 0x0C => self.H = data,
+            0x05 | 0x0D => self.L = data,
+            _ => {}
+        };
+    }
+
     // region: inst
+    #[allow(dead_code)]
+    fn rlc_CB(&mut self, opcode: &u8) -> Result<u8> {
+        let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
+        let mut cycle: u8 = 8;
+
+        if is_cast {
+            let target = register_val as u8;
+            let c = (target & (1 << 7)) == 1 << 7;
+            let val = target.rotate_left(1);
+            
+            self.opcode_to_write_registers(opcode, val);
+            let z = val == 0;
+            self.set_flag(z, false, false, c);
+        }
+        else {
+            let address = register_val;
+            let target = self.bus.read(address)?;
+            let c = (target & (1 << 7)) == 1 << 7;
+            let val = target.rotate_left(1);
+            
+            self.bus.write(address, val)?;
+            let z = val == 0;
+            self.set_flag(z, false, false, c);
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
     #[allow(dead_code)]
     fn rra(&mut self) -> Result<u8> {
         let c = self.get_carry_flag();
@@ -704,7 +740,7 @@ impl Cpu {
 
     #[allow(dead_code)]
     fn swap_CB(&mut self, opcode: &u8) -> Result<u8> {
-        let (register_val, is_cast) = self.opcode_to_registers(opcode);
+        let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
         let mut cycle: u8 = 8;
 
         if is_cast {
