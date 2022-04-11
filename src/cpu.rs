@@ -201,6 +201,7 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x37 => self.scf(),
                     0x3F => self.ccf(),
                     0x2F => self.cpl(),
                     0x27 => self.decimal_adjust_accumlator(),
@@ -533,10 +534,18 @@ impl Cpu {
 
     // region: inst
     #[allow(dead_code)]
+    fn scf(&mut self) -> Result<u8> {
+        let z = self.get_zero_flag();
+        self.set_flag(z, false, false, true);
+
+        Ok(4)
+    }
+
+    #[allow(dead_code)]
     fn ccf(&mut self) -> Result<u8> {
         let z = self.get_zero_flag();
         let c = self.get_carry_flag() ^ true;
-        self.set_flag(z, true, true, c);
+        self.set_flag(z, false, false, c);
 
         Ok(4)
     }
