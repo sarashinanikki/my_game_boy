@@ -207,6 +207,11 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0x38 => self.jr_c(),
+                    0x30 => self.jr_nc(),
+                    0x28 => self.jr_z(),
+                    0x20 => self.jr_nz(),
+                    0x18 => self.jr(),
                     0xE9 => self.jp_hl(),
                     0xDA => self.jp_c(),
                     0xD2 => self.jp_nc(),
@@ -583,6 +588,70 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn jr_c(&mut self) -> Result<u8> {
+        let address = self.read_next_8()?;
+        let mut cycle = 8;
+        let c = self.get_carry_flag();
+        
+        if c {
+            self.PC = self.PC.wrapping_add(address as u16);
+            cycle = 12;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jr_nc(&mut self) -> Result<u8> {
+        let address = self.read_next_8()?;
+        let mut cycle = 8;
+        let c = self.get_carry_flag();
+        
+        if !c {
+            self.PC = self.PC.wrapping_add(address as u16);
+            cycle = 12;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jr_z(&mut self) -> Result<u8> {
+        let address = self.read_next_8()?;
+        let mut cycle = 8;
+        let z = self.get_n_flag();
+        
+        if z {
+            self.PC = self.PC.wrapping_add(address as u16);
+            cycle = 12;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jr_nz(&mut self) -> Result<u8> {
+        let address = self.read_next_8()?;
+        let mut cycle = 8;
+        let z = self.get_n_flag();
+        
+        if !z {
+            self.PC = self.PC.wrapping_add(address as u16);
+            cycle = 12;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jr(&mut self) -> Result<u8> {
+        let address = self.read_next_8()?;
+        self.PC = self.PC.wrapping_add(address as u16);
+
+        Ok(12)
+    }
+
     #[allow(dead_code)]
     fn jp_hl(&mut self) -> Result<u8> {
         let address: u16 = self.get_hl();
