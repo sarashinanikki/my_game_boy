@@ -207,6 +207,11 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0xDC => self.call_c(),
+                    0xD4 => self.call_nc(),
+                    0xCC => self.call_z(),
+                    0xC4 => self.call_nz(),
+                    0xCD => self.call(),
                     0x38 => self.jr_c(),
                     0x30 => self.jr_nc(),
                     0x28 => self.jr_z(),
@@ -588,6 +593,100 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn call_c(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let c = self.get_carry_flag();
+        
+        if c {
+            // 2byteのデータを積むので2回デクリメント
+            self.decrement_sp();
+            self.decrement_sp();
+
+            let stack_address = self.SP;
+            self.bus.write_16(stack_address, self.PC)?;
+            self.PC = address;
+            cycle = 24;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn call_nc(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let c = self.get_carry_flag();
+        
+        if !c {
+            // 2byteのデータを積むので2回デクリメント
+            self.decrement_sp();
+            self.decrement_sp();
+
+            let stack_address = self.SP;
+            self.bus.write_16(stack_address, self.PC)?;
+            self.PC = address;
+            cycle = 24;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn call_z(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let z = self.get_n_flag();
+        
+        if z {
+            // 2byteのデータを積むので2回デクリメント
+            self.decrement_sp();
+            self.decrement_sp();
+
+            let stack_address = self.SP;
+            self.bus.write_16(stack_address, self.PC)?;
+            self.PC = address;
+            cycle = 24;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn call_nz(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let z = self.get_n_flag();
+        
+        if !z {
+            // 2byteのデータを積むので2回デクリメント
+            self.decrement_sp();
+            self.decrement_sp();
+
+            let stack_address = self.SP;
+            self.bus.write_16(stack_address, self.PC)?;
+            self.PC = address;
+            cycle = 24;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn call(&mut self) -> Result<u8> {
+        let address = self.read_next_16()?;
+        // 2byteのデータを積むので2回デクリメント
+        self.decrement_sp();
+        self.decrement_sp();
+
+        let stack_address = self.SP;
+        self.bus.write_16(stack_address, self.PC)?;
+        self.PC = address;
+
+        Ok(24)
+    }
+
     #[allow(dead_code)]
     fn jr_c(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
