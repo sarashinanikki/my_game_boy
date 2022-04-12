@@ -207,6 +207,10 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0xC7 | 0xCF | 
+                    0xD7 | 0xDF |
+                    0xE7 | 0xEF |
+                    0xF7 | 0xFF => self.rst(res),
                     0xDC => self.call_c(),
                     0xD4 => self.call_nc(),
                     0xCC => self.call_z(),
@@ -593,6 +597,31 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn rst(&mut self, opcode: &u8) -> Result<u8> {
+        let address = match opcode {
+            0xC7 => 0,
+            0xCF => 8,
+            0xD7 => 10,
+            0xDF => 18,
+            0xE7 => 20,
+            0xEF => 28,
+            0xF7 => 30,
+            0xFF => 38,
+            _ => bail!("invalid rst opcode!")
+        };
+        
+        // 2byteのデータを積むので2回デクリメント
+        self.decrement_sp();
+        self.decrement_sp();
+
+        let stack_address = self.SP;
+        self.bus.write_16(stack_address, self.PC)?;
+        self.PC = address;
+
+        Ok(16)
+    }
+
     #[allow(dead_code)]
     fn call_c(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
