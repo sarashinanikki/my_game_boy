@@ -207,6 +207,11 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0xD8 => self.ret_c(),
+                    0xD0 => self.ret_nc(),
+                    0xC8 => self.ret_z(),
+                    0xC0 => self.ret_nz(),
+                    0xC9 => self.ret(),
                     0xC7 | 0xCF | 
                     0xD7 | 0xDF |
                     0xE7 | 0xEF |
@@ -597,6 +602,110 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn reti(&mut self) -> Result<u8> {
+        let stack_address = self.SP;
+        let address = self.bus.read_16(stack_address)?;
+        self.PC = address;
+
+        // 2byteのデータをpopするので2回インクリメント
+        self.increment_sp();
+        self.increment_sp();
+
+        // 割り込みを有効化
+        self.interruption = true;
+        Ok(16)
+    }
+
+    #[allow(dead_code)]
+    fn ret_c(&mut self) -> Result<u8> {
+        let mut cycle = 8;
+        let c = self.get_carry_flag();
+        
+        if c {
+            let stack_address = self.SP;
+            let address = self.bus.read_16(stack_address)?;
+            self.PC = address;
+
+            // 2byteのデータをpopするので2回インクリメント
+            self.increment_sp();
+            self.increment_sp();
+            cycle = 20;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn ret_nc(&mut self) -> Result<u8> {
+        let mut cycle = 8;
+        let c = self.get_carry_flag();
+        
+        if !c {
+            let stack_address = self.SP;
+            let address = self.bus.read_16(stack_address)?;
+            self.PC = address;
+
+            // 2byteのデータをpopするので2回インクリメント
+            self.increment_sp();
+            self.increment_sp();
+            cycle = 20;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn ret_z(&mut self) -> Result<u8> {
+        let mut cycle = 8;
+        let z = self.get_n_flag();
+        
+        if z {
+            let stack_address = self.SP;
+            let address = self.bus.read_16(stack_address)?;
+            self.PC = address;
+
+            // 2byteのデータをpopするので2回インクリメント
+            self.increment_sp();
+            self.increment_sp();
+            cycle = 20;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn ret_nz(&mut self) -> Result<u8> {
+        let mut cycle = 8;
+        let z = self.get_n_flag();
+        
+        if !z {
+            let stack_address = self.SP;
+            let address = self.bus.read_16(stack_address)?;
+            self.PC = address;
+
+            // 2byteのデータをpopするので2回インクリメント
+            self.increment_sp();
+            self.increment_sp();
+            cycle = 20;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn ret(&mut self) -> Result<u8> {
+        let stack_address = self.SP;
+        let address = self.bus.read_16(stack_address)?;
+        self.PC = address;
+
+        // 2byteのデータをpopするので2回インクリメント
+        self.increment_sp();
+        self.increment_sp();
+
+        Ok(16)
+    }
+
     #[allow(dead_code)]
     fn rst(&mut self, opcode: &u8) -> Result<u8> {
         let address = match opcode {
