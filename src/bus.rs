@@ -9,11 +9,11 @@ pub struct Bus {
 }
 
 impl Bus {
-    fn new(mbc: Box<dyn Mbc>) -> Self {
+    pub fn new(mbc: Box<dyn Mbc>) -> Self {
         Self { ram: [0; 0x8000], hram: [0; 0x127], mbc }
     }
 
-    fn read(&self, address: u16) -> Result<u8> {
+    pub fn read(&self, address: u16) -> Result<u8> {
         match address {
             0x0000..=0x7FFF => self.mbc.read_rom(address),
             // 0x8000..=0x9FFF => VRAM,
@@ -29,7 +29,15 @@ impl Bus {
         }
     }
 
-    fn write(&mut self, address: u16, data: u8) -> Result<()> {
+    pub fn read_16(&self, address: u16) -> Result<u16> {
+        let low: u8 = self.read(address)?;
+        let high: u8 = self.read(address+1)?;
+        let data: u16 = (high << 8) as u16 + low as u16;
+
+        Ok(data)
+    }
+
+    pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
         match address {
             0x0000..=0x7FFF => self.mbc.write_rom(address, data),
             // 0x8000..=0x9FFF => VRAM,
@@ -49,5 +57,15 @@ impl Bus {
             // 0xFFFF => IE,
             _ => bail!("fail! invalid address")
         }
+    }
+
+    pub fn write_16(&mut self, address: u16, data: u16) -> Result<()> {
+        let low: u8 = (data & 0x00FF) as u8;
+        let high: u8 = (data >> 8) as u8;
+
+        self.write(address, low)?;
+        self.write(address+1, high)?;
+
+        Ok(())
     }
 }
