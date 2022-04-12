@@ -434,6 +434,7 @@ impl Cpu {
                     0x30..=0x37 => self.swap_CB(res),
                     0x38..=0x3F => self.srl_CB(res),
                     0x40..=0x7F => self.bit_CB(res),
+                    0x80..=0xBF => self.res_CB(res),
                     0xC0..=0xFF => self.set_CB(res),
                     _ => Ok(0)
                 }
@@ -576,6 +577,29 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn res_CB(&mut self, opcode: &u8) -> Result<u8> {
+        let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
+        let mut cycle: u8 = 8;
+        let target_bit: u8 = self.get_bit_target(opcode, 8);
+
+        if is_cast {
+            let target = register_val as u8;
+            let data = target & !(1 << target_bit);
+            self.opcode_to_write_registers(opcode, data);
+        }
+        else {
+            let address = register_val;
+            let target = self.bus.read(address)?;
+            let data = target & !(1 << target_bit);
+            self.bus.write(address, data)?;
+            
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
     #[allow(dead_code)]
     fn set_CB(&mut self, opcode: &u8) -> Result<u8> {
         let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
