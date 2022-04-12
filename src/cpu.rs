@@ -207,6 +207,12 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0xE9 => self.jp_hl(),
+                    0xDA => self.jp_c(),
+                    0xD2 => self.jp_nc(),
+                    0xCA => self.jp_z(),
+                    0xC2 => self.jp_nz(),
+                    0xC3 => self.jp(),
                     0x1F => self.rra(),
                     0x0F => self.rrca(),
                     0x17 => self.rla(),
@@ -577,6 +583,78 @@ impl Cpu {
     }
 
     // region: inst
+    #[allow(dead_code)]
+    fn jp_hl(&mut self) -> Result<u8> {
+        let address: u16 = self.get_hl();
+        self.PC = address;
+
+        Ok(4)
+    }
+
+    #[allow(dead_code)]
+    fn jp_c(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let c = self.get_carry_flag();
+        
+        if c {
+            self.PC = address;
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jp_nc(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let c = self.get_carry_flag();
+        
+        if !c {
+            self.PC = address;
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jp_z(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let z = self.get_n_flag();
+        
+        if z {
+            self.PC = address;
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jp_nz(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        let mut cycle = 12;
+        let z = self.get_n_flag();
+        
+        if !z {
+            self.PC = address;
+            cycle = 16;
+        }
+
+        Ok(cycle)
+    }
+
+    #[allow(dead_code)]
+    fn jp(&mut self) -> Result<u8> {
+        let address: u16 = self.read_next_16()?;
+        self.PC = address;
+
+        Ok(16)
+    }
+
     #[allow(dead_code)]
     fn res_CB(&mut self, opcode: &u8) -> Result<u8> {
         let (register_val, is_cast) = self.opcode_to_read_registers(opcode);
