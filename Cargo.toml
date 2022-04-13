@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.55"
+winit = "0.26.1"
+winit_input_helper = "0.12.0"
