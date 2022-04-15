@@ -32,7 +32,7 @@ impl Bus {
     pub fn read_16(&self, address: u16) -> Result<u16> {
         let low: u8 = self.read(address)?;
         let high: u8 = self.read(address+1)?;
-        let data: u16 = (high << 8) as u16 + low as u16;
+        let data: u16 = (high as u16) << 8 + low as u16;
 
         Ok(data)
     }
