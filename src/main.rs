@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::time::{Duration, Instant};
+use std::thread::sleep;
 
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -35,6 +37,8 @@ fn main() {
     let mut cpu = cpu::Cpu::new(bus);
     
     event_loop.run(move |event, _, control_flow| {
+        let start = Instant::now();
+
         if input.update(&event) {
             if input.key_released(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
@@ -43,6 +47,14 @@ fn main() {
         }
 
         cpu.run().unwrap();
+
+        let duration = start.elapsed().as_micros();
+        let frame_microsec: u128 = 1_000_000 / 60;
+
+        if duration < frame_microsec {
+            let wait_time: u128 = frame_microsec - duration;
+            sleep(Duration::from_micros(wait_time as u64));
+        }
 
         if let Event::RedrawRequested(_) = event {
             draw(pixels.get_frame());
