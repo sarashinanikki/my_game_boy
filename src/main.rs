@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::BufReader;
+
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
@@ -24,6 +27,12 @@ fn main() {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
     let mut pixels = Pixels::new(320, 240, surface_texture).unwrap();
+
+    let mut reader = BufReader::new(File::open("../rom/hello-world.gb").unwrap());
+    let rom = rom::Rom::new(&mut reader).unwrap();
+    let mbc = Box::new(mbc::NoMbc{mbc_type: 0, rom});
+    let bus = bus::Bus::new(mbc);
+    let mut cpu = cpu::Cpu::new(bus);
     
     event_loop.run(move |event, _, control_flow| {
         if input.update(&event) {
@@ -33,6 +42,8 @@ fn main() {
             }
         }
 
+        cpu.run().unwrap();
+
         if let Event::RedrawRequested(_) = event {
             draw(pixels.get_frame());
             if pixels.render().is_err() {
@@ -40,6 +51,8 @@ fn main() {
                 return;
             }
         }
+
+        window.request_redraw();
     })
 }
 

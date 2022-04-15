@@ -24,7 +24,7 @@ pub struct Opcode {
 }
 
 impl Cpu {
-    pub fn new(&self, bus: Bus) -> Self {
+    pub fn new(bus: Bus) -> Self {
         Self {
             A: Default::default(),
             B: Default::default(),
@@ -46,23 +46,21 @@ impl Cpu {
     // HALTを有効にしたり割り込みをさせたりするためには、ここにメインループを書くのは筋が悪そうということが分かった
     // TODO: 他を書く段階でmainに移す
     pub fn run(&mut self) -> Result<()> {
-        loop {
-            let max_cycle: usize = 70000;
-            let mut current_cycle: usize = 0;
-    
-            while current_cycle < max_cycle {
-                // 命令コードを取得
-                let opcode: Opcode = self.read_inst()?;
-                // 命令コードを実行
-                let op_cycle: u8 = self.excute_op(&opcode)?;
-                // 現在のサイクル数を更新
-                current_cycle += op_cycle as usize;
-                // PCをインクリメント
-                self.increment_pc();
-            }
+        let max_cycle: usize = 69905;
+        let mut current_cycle: usize = 0;
 
-            Cpu::render_screen();
+        while current_cycle < max_cycle {
+            // 命令コードを取得
+            let opcode: Opcode = self.read_inst()?;
+            // 命令コードを実行
+            let op_cycle: u8 = self.excute_op(&opcode)?;
+            // 現在のサイクル数を更新
+            current_cycle += op_cycle as usize;
+            // PCをインクリメント
+            self.increment_pc();
         }
+
+        Ok(())
     }
 
     // 命令の読み込み
