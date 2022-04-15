@@ -1,3 +1,5 @@
+use std::io;
+
 use anyhow::{bail, Result};
 
 use crate::bus::Bus;
@@ -14,7 +16,9 @@ pub struct Cpu {
     PC: u16,
     bus: Bus,
     halt: bool,
-    interruption: bool
+    interruption: bool,
+    step_flag: bool,
+    break_points: Vec<u16>
 }
 
 #[derive(Default)]
@@ -38,29 +42,71 @@ impl Cpu {
             PC: 0x100,
             bus,
             halt: Default::default(),
-            interruption: Default::default()
+            interruption: Default::default(),
+            step_flag: Default::default(),
+            break_points: Default::default()
         }
     }
 
     // メインループ
-    // HALTを有効にしたり割り込みをさせたりするためには、ここにメインループを書くのは筋が悪そうということが分かった
-    // TODO: 他を書く段階でmainに移す
     pub fn run(&mut self) -> Result<()> {
         let max_cycle: usize = 69905;
         let mut current_cycle: usize = 0;
 
         while current_cycle < max_cycle {
+            // 現在のPCにブレークポイントが張られていないか確認
+            self.check_break_points();
+
             // 命令コードを取得
             let opcode: Opcode = self.read_inst()?;
             // 命令コードを実行
             let op_cycle: u8 = self.excute_op(&opcode)?;
             // 現在のサイクル数を更新
             current_cycle += op_cycle as usize;
+
+            // ステップ実行が有効化されていた場合はステップ実行に
+            if self.step_flag {
+                self.stepping();
+            }
+
             // PCをインクリメント
             self.increment_pc();
         }
 
         Ok(())
+    }
+
+    // 現在のPCにブレークポイントが張られていた場合はステップ実行をON
+    fn check_break_points(&mut self) {
+        if self.break_points.contains(&self.PC) {
+            self.step_flag = true;
+        }
+    }
+
+    // ステップ実行
+    fn stepping(&mut self) {
+        // 現状を出力
+        println!("Current Data:");
+        self.debug_output();
+
+        loop {
+            let mut raw_command = String::new();
+            print!("dbg: ");
+            io::stdin().read_line(&mut raw_command).expect("Failed to read");
+            let command = raw_command.trim_end();
+
+            match command {
+                "n" => break,
+                "d" => self.debug_output(),
+                "go" => self.step_flag = false,
+                _ => println!("unknown command")
+            }
+        }
+    }
+
+    // デバッグ情報を出力
+    fn debug_output(&self) {
+
     }
 
     // 命令の読み込み
