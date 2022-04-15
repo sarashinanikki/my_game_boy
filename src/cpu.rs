@@ -66,7 +66,7 @@ impl Cpu {
 
             // ステップ実行が有効化されていた場合はステップ実行に
             if self.step_flag {
-                self.stepping();
+                self.stepping(&opcode);
             }
 
             // PCをインクリメント
@@ -84,10 +84,10 @@ impl Cpu {
     }
 
     // ステップ実行
-    fn stepping(&mut self) {
+    fn stepping(&mut self, opcode: &Opcode) {
         // 現状を出力
         println!("Current Data:");
-        self.debug_output();
+        self.debug_output(opcode);
 
         loop {
             let mut raw_command = String::new();
@@ -97,7 +97,7 @@ impl Cpu {
 
             match command {
                 "n" => break,
-                "d" => self.debug_output(),
+                "d" => self.debug_output(opcode),
                 "go" => self.step_flag = false,
                 _ => println!("unknown command")
             }
@@ -105,8 +105,12 @@ impl Cpu {
     }
 
     // デバッグ情報を出力
-    fn debug_output(&self) {
-
+    fn debug_output(&self, opcode: &Opcode) {
+        println!(
+            "PC: {:X}, opcode: {:X}, CB: {}\n 
+            A: {:X}, B: {:X}, C: {:X}, D: {:X}, E: {:X}, F: {:X}, H: {:X}, L: {:X}, SP: {:X}",
+            self.PC, opcode.code, opcode.cb_prefix, self.A, self.B, self.C, self.D, self.E, self.F, self.H, self.L, self.SP
+        )
     }
 
     // 命令の読み込み
