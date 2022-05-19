@@ -33,7 +33,8 @@ fn main() {
     let mut reader = BufReader::new(File::open("../rom/hello-world.gb").unwrap());
     let rom = rom::Rom::new(&mut reader).unwrap();
     let mbc = Box::new(mbc::NoMbc{mbc_type: 0, rom});
-    let bus = bus::Bus::new(mbc);
+    let ppu = ppu::Ppu::new();
+    let bus = bus::Bus::new(mbc, ppu);
     let mut cpu = cpu::Cpu::new(bus);
     
     event_loop.run(move |event, _, control_flow| {
@@ -57,7 +58,7 @@ fn main() {
         }
 
         if let Event::RedrawRequested(_) = event {
-            draw(pixels.get_frame());
+            cpu.render(pixels.get_frame());
             if pixels.render().is_err() {
                 *control_flow = ControlFlow::Exit;
                 return;
@@ -66,23 +67,4 @@ fn main() {
 
         window.request_redraw();
     })
-}
-fn draw(frame: &mut [u8]) {
-    /*
-    for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-        let x = (i % 320 as usize) as i16;
-        let y = (i / 320 as usize) as i16;
-
-        let inside = x >= 10 && x < 110
-            && y > 20 && y < 120;
-
-        let rgba = if inside {
-            [0x5e, 0x99, 0x39, 0xff]
-        } else {
-            [0x48, 0xb2, 0xe8, 0xff]
-        };
-
-        pixel.copy_from_slice(&rgba);
-    }
-    */
 }

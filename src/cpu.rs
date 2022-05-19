@@ -76,6 +76,10 @@ impl Cpu {
         Ok(())
     }
 
+    pub fn render(&mut self, frame: &mut [u8]) {
+        self.bus.ppu.render(frame).unwrap();
+    }
+
     // 現在のPCにブレークポイントが張られていた場合はステップ実行をON
     fn check_break_points(&mut self) {
         if self.break_points.contains(&self.PC) {

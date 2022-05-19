@@ -1,16 +1,17 @@
 use anyhow::{Result, bail};
 
-use crate::mbc::Mbc;
+use crate::{mbc::Mbc, ppu::Ppu};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
     pub hram: [u8; 0x127],
+    pub ppu: Ppu,
     pub mbc: Box<dyn Mbc>
 }
 
 impl Bus {
-    pub fn new(mbc: Box<dyn Mbc>) -> Self {
-        Self { ram: [0; 0x8192], hram: [0; 0x127], mbc }
+    pub fn new(mbc: Box<dyn Mbc>, ppu: Ppu) -> Self {
+        Self { ram: [0; 0x8192], hram: [0; 0x127], ppu, mbc }
     }
 
     pub fn read(&self, address: u16) -> Result<u8> {
