@@ -18,7 +18,8 @@ pub struct Cpu {
     halt: bool,
     interruption: bool,
     step_flag: bool,
-    break_points: Vec<u16>
+    break_points: Vec<u16>,
+    jmp_flag: bool
 }
 
 #[derive(Default)]
@@ -44,7 +45,8 @@ impl Cpu {
             halt: Default::default(),
             interruption: Default::default(),
             step_flag: Default::default(),
-            break_points: Default::default()
+            break_points: Default::default(),
+            jmp_flag: false
         }
     }
 
@@ -52,6 +54,7 @@ impl Cpu {
     pub fn run(&mut self) -> Result<()> {
         let max_cycle: usize = 69905;
         let mut current_cycle: usize = 0;
+        self.step_flag = true;
 
         while current_cycle < max_cycle {
             // 現在のPCにブレークポイントが張られていないか確認
@@ -64,13 +67,18 @@ impl Cpu {
             // 現在のサイクル数を更新
             current_cycle += op_cycle as usize;
 
+            // PCをインクリメント
+            if !self.jmp_flag {
+                self.increment_pc();
+            }
+            else {
+                self.jmp_flag = false;
+            }
+
             // ステップ実行が有効化されていた場合はステップ実行に
             if self.step_flag {
                 self.stepping(&opcode);
             }
-
-            // PCをインクリメント
-            self.increment_pc();
         }
 
         Ok(())
@@ -95,7 +103,6 @@ impl Cpu {
 
         loop {
             let mut raw_command = String::new();
-            print!("dbg: ");
             io::stdin().read_line(&mut raw_command).expect("Failed to read");
             let command = raw_command.trim_end();
 
@@ -659,6 +666,7 @@ impl Cpu {
         let stack_address = self.SP;
         let address = self.bus.read_16(stack_address)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         // 2byteのデータをpopするので2回インクリメント
         self.increment_sp();
@@ -678,6 +686,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -697,6 +706,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -716,6 +726,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -735,6 +746,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -750,6 +762,7 @@ impl Cpu {
         let stack_address = self.SP;
         let address = self.bus.read_16(stack_address)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         // 2byteのデータをpopするので2回インクリメント
         self.increment_sp();
@@ -779,6 +792,7 @@ impl Cpu {
         let stack_address = self.SP;
         self.bus.write_16(stack_address, self.PC)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(16)
     }
@@ -797,6 +811,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -817,6 +832,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -837,6 +853,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -857,6 +874,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -873,6 +891,7 @@ impl Cpu {
         let stack_address = self.SP;
         self.bus.write_16(stack_address, self.PC)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(24)
     }
@@ -885,6 +904,7 @@ impl Cpu {
         
         if c {
             self.PC = self.PC.wrapping_add(address as u16);
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -899,6 +919,7 @@ impl Cpu {
         
         if !c {
             self.PC = self.PC.wrapping_add(address as u16);
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -913,6 +934,7 @@ impl Cpu {
         
         if z {
             self.PC = self.PC.wrapping_add(address as u16);
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -927,6 +949,7 @@ impl Cpu {
         
         if !z {
             self.PC = self.PC.wrapping_add(address as u16);
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -937,6 +960,7 @@ impl Cpu {
     fn jr(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
         self.PC = self.PC.wrapping_add(address as u16);
+        self.jmp_flag = true;
 
         Ok(12)
     }
@@ -945,6 +969,7 @@ impl Cpu {
     fn jp_hl(&mut self) -> Result<u8> {
         let address: u16 = self.get_hl();
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(4)
     }
@@ -957,6 +982,7 @@ impl Cpu {
         
         if c {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -971,6 +997,7 @@ impl Cpu {
         
         if !c {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -985,6 +1012,7 @@ impl Cpu {
         
         if z {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -999,6 +1027,7 @@ impl Cpu {
         
         if !z {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -1009,6 +1038,7 @@ impl Cpu {
     fn jp(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(16)
     }
@@ -3208,6 +3238,7 @@ impl Cpu {
     #[allow(dead_code)]
     fn ld_F0(&mut self) -> Result<u8> {
         let input: u8 = self.read_next_8()?;
+        println!("input = {}", input);
         let address = (input as u16) + (0xFF00);
         let data = self.bus.read(address)?;        
         self.A = data;
