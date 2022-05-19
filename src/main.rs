@@ -21,14 +21,14 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("My Game Boy")
-        .with_inner_size(LogicalSize::new(320, 240))
-        .with_min_inner_size(LogicalSize::new(320, 240))
+        .with_inner_size(LogicalSize::new(160, 144))
+        .with_min_inner_size(LogicalSize::new(160, 144))
         .build(&event_loop)
         .unwrap();
 
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-    let mut pixels = Pixels::new(320, 240, surface_texture).unwrap();
+    let mut pixels = Pixels::new(160, 144, surface_texture).unwrap();
 
     let mut reader = BufReader::new(File::open("../rom/hello-world.gb").unwrap());
     let rom = rom::Rom::new(&mut reader).unwrap();
@@ -67,8 +67,8 @@ fn main() {
         window.request_redraw();
     })
 }
-
 fn draw(frame: &mut [u8]) {
+    /*
     for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
         let x = (i % 320 as usize) as i16;
         let y = (i / 320 as usize) as i16;
@@ -84,4 +84,5 @@ fn draw(frame: &mut [u8]) {
 
         pixel.copy_from_slice(&rgba);
     }
+    */
 }
