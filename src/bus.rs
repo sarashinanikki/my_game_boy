@@ -17,12 +17,19 @@ impl Bus {
     pub fn read(&self, address: u16) -> Result<u8> {
         match address {
             0x0000..=0x7FFF => self.mbc.read_rom(address),
-            // 0x8000..=0x9FFF => VRAM,
-            0xA000..=0xBFFF => self.mbc.read_ram(address),
+            0x8000..=0x9FFF => self.ppu.read(address-0x8000),
+            0xA000..=0xBFFF => self.mbc.read_ram(address-0xA000),
             0xC000..=0xDFFF => Ok(self.ram[(address-0xC000) as usize]),
             // 0xE000..=0xFDFF => ECHO RAM,
             // 0xFE00..=0xFE9F => OAM,
             0xFEA0..=0xFEFF => Ok(0),
+            0xFF40 => self.ppu.lcd_control_read(),
+            0xFF42 => self.ppu.scy_read(),
+            0xFF43 => self.ppu.scx_read(),
+            0xFF44 => self.ppu.ly_read(),
+            0xFF45 => self.ppu.lyc_read(),
+            0xFF4A => self.ppu.wy_read(),
+            0xFF4B => self.ppu.wx_read(),
             // 0xFF00..=0xFF7F => IO,
             0xFF80..=0xFFFE => Ok(self.hram[(address-0xFF80) as usize]),
             // 0xFFFF => IE,
@@ -41,8 +48,8 @@ impl Bus {
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
         match address {
             0x0000..=0x7FFF => self.mbc.write_rom(address, data),
-            // 0x8000..=0x9FFF => VRAM,
-            0xA000..=0xBFFF => self.mbc.write_ram(address, data),
+            0x8000..=0x9FFF => self.ppu.write(address-0x8000, data),
+            0xA000..=0xBFFF => self.mbc.write_ram(address-0xA000, data),
             0xC000..=0xDFFF => {
                 self.ram[(address-0xC000) as usize] = data;
                 Ok(())
@@ -51,6 +58,13 @@ impl Bus {
             // 0xFE00..=0xFE9F => OAM,
             0xFEA0..=0xFEFF => Ok(()),
             // 0xFF00..=0xFF7F => IO,
+            0xFF40 => self.ppu.lcd_control_write(data),
+            0xFF42 => self.ppu.scy_write(data),
+            0xFF43 => self.ppu.scx_write(data),
+            0xFF44 => self.ppu.ly_write(data),
+            0xFF45 => self.ppu.lyc_write(data),
+            0xFF4A => self.ppu.wy_write(data),
+            0xFF4B => self.ppu.wx_write(data),
             0xFF80..=0xFFFE => {
                 self.hram[(address-0xFF80) as usize] = data;
                 Ok(())

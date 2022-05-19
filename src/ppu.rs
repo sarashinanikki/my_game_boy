@@ -112,62 +112,72 @@ impl Ppu {
         Ok(data)
     }
 
-    pub fn lcd_control_write(&mut self, address: u16, data: u8) -> Result<()> {
+    pub fn lcd_control_write(&mut self, data: u8) -> Result<()> {
         self.lcd_control = data;
         Ok(())
     }
 
-    pub fn lcd_control_read(&self, address: u16) -> Result<u8> {
+    pub fn lcd_control_read(&self) -> Result<u8> {
         let data = self.lcd_control;
         Ok(data)
     }
 
-    pub fn scy_write(&mut self, address: u16, data: u8) -> Result<()> {
+    pub fn scy_write(&mut self, data: u8) -> Result<()> {
         self.scy = data;
         Ok(())
     }
 
-    pub fn scy_control_read(&self, address: u16) -> Result<u8> {
+    pub fn scy_read(&self) -> Result<u8> {
         let data = self.scy;
         Ok(data)
     }
 
-    pub fn ly_write(&mut self, address: u16, data: u8) -> Result<()> {
+    pub fn scx_write(&mut self, data: u8) -> Result<()> {
+        self.scx = data;
+        Ok(())
+    }
+
+    pub fn scx_read(&self) -> Result<u8> {
+        let data = self.scx;
+        Ok(data)
+    }
+
+    pub fn ly_write(&mut self, data: u8) -> Result<()> {
         self.ly = data;
         Ok(())
     }
 
-    pub fn ly_read(&self, address: u16) -> Result<u8> {
+    pub fn ly_read(&self) -> Result<u8> {
         let data = self.ly;
         Ok(data)
     }
 
-    pub fn lyc_write(&mut self, address: u16, data: u8) -> Result<()> {
+    pub fn lyc_write(&mut self, data: u8) -> Result<()> {
         self.lyc = data;
         Ok(())
     }
 
-    pub fn lyc_read(&self, address: u16) -> Result<u8> {
+    pub fn lyc_read(&self) -> Result<u8> {
         let data = self.lyc;
         Ok(data)
     }
 
-    pub fn wy_write(&mut self, address: u16, data: u8) -> Result<()> {
+    pub fn wy_write(&mut self, data: u8) -> Result<()> {
         self.wy = data;
         Ok(())
     }
 
-    pub fn wy_read(&self, address: u16) -> Result<u8> {
+    pub fn wy_read(&self) -> Result<u8> {
         let data = self.wy;
         Ok(data)
     }
 
-    pub fn wx_write(&mut self, address: u16, data: u8) -> Result<()> {
+    pub fn wx_write(&mut self, data: u8) -> Result<()> {
         self.wx = data;
         Ok(())
     }
 
-    pub fn wx_read(&self, address: u16) -> Result<u8> {
+    pub fn wx_read(&self) -> Result<u8> {
         let data = self.wx;
         Ok(data)
     }
