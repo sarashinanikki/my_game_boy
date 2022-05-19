@@ -30,7 +30,7 @@ fn main() {
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
     let mut pixels = Pixels::new(160, 144, surface_texture).unwrap();
 
-    let mut reader = BufReader::new(File::open("../rom/hello-world.gb").unwrap());
+    let mut reader = BufReader::new(File::open("/home/sarashin/hobby/game_boy_rust/rom/hello-world.gb").unwrap());
     let rom = rom::Rom::new(&mut reader).unwrap();
     let mbc = Box::new(mbc::NoMbc{mbc_type: 0, rom});
     let ppu = ppu::Ppu::new();
