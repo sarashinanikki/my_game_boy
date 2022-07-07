@@ -41,6 +41,14 @@ impl Ppu {
     }
 
     pub fn render(&mut self, frame: &mut [u8]) -> Result<()> {
+        // OAM Scan
+
+        // Drawing
+
+        // H-Blank
+
+        // V-Blank
+
         let lcd0 = self.read_lcd_bit(0);
         let lcd4 = self.read_lcd_bit(4);
         let lcd6 = self.read_lcd_bit(6);
