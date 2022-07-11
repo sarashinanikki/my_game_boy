@@ -14,13 +14,6 @@ pub struct NoMbc {
     pub rom: Rom
 }
 
-impl NoMbc {
-    fn new(rom: Rom) -> Self {
-        let mbc_type: u8 = 0;
-        Self { mbc_type, rom }
-    }
-}
-
 impl Mbc for NoMbc {
     fn read_rom(&self, address: u16) -> Result<u8> {
         let ret = self.rom.data[address as usize];

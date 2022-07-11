@@ -1,3 +1,5 @@
+use std::io;
+
 use anyhow::{bail, Result};
 
 use crate::bus::Bus;
@@ -14,7 +16,11 @@ pub struct Cpu {
     PC: u16,
     bus: Bus,
     halt: bool,
-    interruption: bool
+    interruption: bool,
+    step_flag: bool,
+    debug_flag: bool,
+    break_points: Vec<u16>,
+    jmp_flag: bool
 }
 
 #[derive(Default)]
@@ -24,7 +30,7 @@ pub struct Opcode {
 }
 
 impl Cpu {
-    pub fn new(&self, bus: Bus) -> Self {
+    pub fn new(bus: Bus) -> Self {
         Self {
             A: Default::default(),
             B: Default::default(),
@@ -38,31 +44,127 @@ impl Cpu {
             PC: 0x100,
             bus,
             halt: Default::default(),
-            interruption: Default::default()
+            interruption: Default::default(),
+            step_flag: Default::default(),
+            debug_flag: Default::default(),
+            break_points: Default::default(),
+            jmp_flag: false
         }
     }
 
     // メインループ
-    // HALTを有効にしたり割り込みをさせたりするためには、ここにメインループを書くのは筋が悪そうということが分かった
-    // TODO: 他を書く段階でmainに移す
     pub fn run(&mut self) -> Result<()> {
-        loop {
-            let max_cycle: usize = 70000;
-            let mut current_cycle: usize = 0;
-    
-            while current_cycle < max_cycle {
-                // 命令コードを取得
-                let opcode: Opcode = self.read_inst()?;
-                // 命令コードを実行
-                let op_cycle: u8 = self.excute_op(&opcode)?;
-                // 現在のサイクル数を更新
-                current_cycle += op_cycle as usize;
-                // PCをインクリメント
-                self.increment_pc();
+        let max_cycle: usize = 70224;
+        let mut current_cycle: usize = 0;
+        // self.step_flag = true;
+
+        while current_cycle < max_cycle {
+            // 現在のPCにブレークポイントが張られていないか確認
+            self.check_break_points();
+            
+            // 命令コードを取得
+            let opcode: Opcode = self.read_inst()?;
+
+            if self.debug_flag {
+                self.debug_output(&opcode);
             }
 
-            Cpu::render_screen();
+            // 命令コードを実行
+            let op_cycle: u8 = self.excute_op(&opcode)?;
+            // 現在のサイクル数を更新
+            current_cycle += op_cycle as usize;
+            
+            // PPUをサイクル分動かす
+            self.bus.ppu.tick(op_cycle);
+
+            // PCをインクリメント
+            if !self.jmp_flag {
+                self.increment_pc();
+            }
+            else {
+                self.jmp_flag = false;
+            }
+
+            // ステップ実行が有効化されていた場合はステップ実行に
+            if self.step_flag {
+                self.stepping(&opcode);
+            }
         }
+
+        Ok(())
+    }
+
+    pub fn render(&mut self, frame: &mut [u8]) {
+        self.bus.ppu.render(frame).unwrap();
+    }
+
+    // 現在のPCにブレークポイントが張られていた場合はステップ実行をON
+    fn check_break_points(&mut self) {
+        if self.break_points.contains(&self.PC) {
+            self.step_flag = true;
+        }
+    }
+
+    pub fn set_break_point(&mut self, bp: u16) {
+        self.break_points.push(bp);
+    }
+
+    // ステップ実行
+    fn stepping(&mut self, opcode: &Opcode) {
+        // 現状を出力
+        println!("Current Data:");
+        self.debug_output(opcode);
+
+        loop {
+            let mut raw_command = String::new();
+            io::stdin().read_line(&mut raw_command).expect("Failed to read");
+            let command = raw_command.trim_end();
+
+            match command {
+                "n" => break,
+                "debug" => {
+                    self.debug_flag = !self.debug_flag;
+                },
+                "dump" => {
+                    self.bus.ppu.dump();
+                }
+                "go" => {
+                    self.step_flag = false;
+                    break;
+                },
+                "set bp" => {
+                    print!("set break point => ");
+                    let mut raw_bp = String::new();
+                    io::stdin().read_line(&mut raw_bp).expect("Failed to read");
+                    let str_bp = raw_bp.trim_start_matches("0x").trim_end();
+                    let bp = u16::from_str_radix(str_bp, 16).unwrap();
+                    self.break_points.push(bp);
+                },
+                "rm bp" => {
+                    print!("remove break point => ");
+                    let mut raw_bp = String::new();
+                    io::stdin().read_line(&mut raw_bp).expect("Failed to read");
+                    let str_bp = raw_bp.trim_start_matches("0x").trim_end();
+                    println!("str_bp = {}", str_bp);
+                    let bp = u16::from_str_radix(str_bp, 16).unwrap();
+                    if let Some(idx) = self.break_points.iter().position(|x| *x == bp) {
+                        self.break_points.remove(idx);
+                        self.step_flag = false;
+                    }
+                },
+                _ => println!("unknown command")
+            }
+        }
+    }
+
+    // デバッグ情報を出力
+    fn debug_output(&self, opcode: &Opcode) {
+        println!(
+            "PC: {:X}, opcode: {:X}, CB: {}\n 
+            A: {:X}, B: {:X}, C: {:X}, D: {:X}, E: {:X}, F: {:X}, H: {:X}, L: {:X}, SP: {:X}, AF: {:X}, BC: {:X}, DE: {:X}, HL: {:X}",
+            self.PC, opcode.code, opcode.cb_prefix, self.A, self.B, self.C, self.D, self.E, self.F, self.H, self.L, self.SP,
+            self.get_af(), self.get_bc(), self.get_de(), self.get_hl()
+        )
     }
 
     // 命令の読み込み
@@ -467,13 +569,8 @@ impl Cpu {
         }
     }
 
-    // 画面の描画
-    fn render_screen() {
-
-    }
-
     // (h, c)を返す。8bitの足し算時に使う
-    fn is_carry_positive(&mut self, left: u8, right: u8) -> (bool, bool) {
+    fn is_carry_positive(&mut self, left: u16, right: u16) -> (bool, bool) {
         let h: bool = ((left & 0x0F) + (right & 0x0F) & 0x10) == 0x10;
         let c: bool = ((left & 0xFF) as u16 + (right & 0xFF) as u16 & 0x100) == 0x100;
 
@@ -607,6 +704,7 @@ impl Cpu {
         let stack_address = self.SP;
         let address = self.bus.read_16(stack_address)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         // 2byteのデータをpopするので2回インクリメント
         self.increment_sp();
@@ -626,6 +724,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -645,6 +744,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -664,6 +764,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -683,6 +784,7 @@ impl Cpu {
             let stack_address = self.SP;
             let address = self.bus.read_16(stack_address)?;
             self.PC = address;
+            self.jmp_flag = true;
 
             // 2byteのデータをpopするので2回インクリメント
             self.increment_sp();
@@ -698,6 +800,7 @@ impl Cpu {
         let stack_address = self.SP;
         let address = self.bus.read_16(stack_address)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         // 2byteのデータをpopするので2回インクリメント
         self.increment_sp();
@@ -727,6 +830,7 @@ impl Cpu {
         let stack_address = self.SP;
         self.bus.write_16(stack_address, self.PC)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(16)
     }
@@ -745,6 +849,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -765,6 +870,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -785,6 +891,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -805,6 +912,7 @@ impl Cpu {
             let stack_address = self.SP;
             self.bus.write_16(stack_address, self.PC)?;
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 24;
         }
 
@@ -821,6 +929,7 @@ impl Cpu {
         let stack_address = self.SP;
         self.bus.write_16(stack_address, self.PC)?;
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(24)
     }
@@ -830,9 +939,12 @@ impl Cpu {
         let address = self.read_next_8()?;
         let mut cycle = 8;
         let c = self.get_carry_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if c {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -844,9 +956,12 @@ impl Cpu {
         let address = self.read_next_8()?;
         let mut cycle = 8;
         let c = self.get_carry_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if !c {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -857,10 +972,13 @@ impl Cpu {
     fn jr_z(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
         let mut cycle = 8;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if z {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -871,10 +989,13 @@ impl Cpu {
     fn jr_nz(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
         let mut cycle = 8;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if !z {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
+            self.jmp_flag = true;
             cycle = 12;
         }
 
@@ -884,7 +1005,10 @@ impl Cpu {
     #[allow(dead_code)]
     fn jr(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
-        self.PC = self.PC.wrapping_add(address as u16);
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
+        self.PC = pc as u16;
+        self.jmp_flag = true;
 
         Ok(12)
     }
@@ -893,6 +1017,7 @@ impl Cpu {
     fn jp_hl(&mut self) -> Result<u8> {
         let address: u16 = self.get_hl();
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(4)
     }
@@ -905,6 +1030,7 @@ impl Cpu {
         
         if c {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -919,6 +1045,7 @@ impl Cpu {
         
         if !c {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -933,6 +1060,7 @@ impl Cpu {
         
         if z {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -947,6 +1075,7 @@ impl Cpu {
         
         if !z {
             self.PC = address;
+            self.jmp_flag = true;
             cycle = 16;
         }
 
@@ -957,6 +1086,7 @@ impl Cpu {
     fn jp(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
         self.PC = address;
+        self.jmp_flag = true;
 
         Ok(16)
     }
@@ -1734,7 +1864,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1752,7 +1882,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1770,7 +1900,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1788,7 +1918,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.E = val;
@@ -1808,7 +1938,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1826,7 +1956,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1844,7 +1974,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1862,7 +1992,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left, right);
+        let (h, _) = self.is_carry_positive(left as u16, right as u16);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -2697,7 +2827,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, data+carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, data as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2716,7 +2846,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, data+carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, data as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2734,7 +2864,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right + carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2752,7 +2882,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right + carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2770,7 +2900,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right + carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2788,7 +2918,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right + carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2806,7 +2936,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right + carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2824,7 +2954,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right + carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2842,7 +2972,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right + carry_val);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2857,7 +2987,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2873,7 +3003,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2888,7 +3018,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2903,7 +3033,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2918,7 +3048,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2933,7 +3063,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2948,7 +3078,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2963,7 +3093,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2979,7 +3109,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right);
+        let (h, c) = self.is_carry_positive(left as u16, right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3157,7 +3287,7 @@ impl Cpu {
     fn ld_F0(&mut self) -> Result<u8> {
         let input: u8 = self.read_next_8()?;
         let address = (input as u16) + (0xFF00);
-        let data = self.bus.read(address)?;        
+        let data = self.bus.read(address)?;
         self.A = data;
 
         Ok(12)
@@ -3705,78 +3835,48 @@ impl Cpu {
 
     #[allow(dead_code)]
     fn ld_06(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.B = res;
-        }
-        else {
-            bail!("fail! error occured in ld_06")
-        }
+        let val = self.read_next_8()?;
+        self.B = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_0E(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.C = res;
-        }
-        else {
-            bail!("fail! error occured in ld_0E")
-        }
+        let val = self.read_next_8()?;
+        self.C = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_16(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.D = res;
-        }
-        else {
-            bail!("fail! error occured in ld_16")
-        }
+        let val = self.read_next_8()?;
+        self.D = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_1E(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.E = res;
-        }
-        else {
-            bail!("fail! error occured in ld_1E")
-        }
+        let val = self.read_next_8()?;
+        self.E = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_26(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.H = res;
-        }
-        else {
-            bail!("fail! error occured in ld_26")
-        }
+        let val = self.read_next_8()?;
+        self.H = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_2E(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.L = res;
-        }
-        else {
-            bail!("fail! error occured in ld_2E")
-        }
+        let val = self.read_next_8()?;
+        self.L = val;
 
         Ok(8)
     }

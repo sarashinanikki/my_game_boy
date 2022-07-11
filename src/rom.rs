@@ -77,15 +77,16 @@ impl Rom {
         reader.read_exact(&mut rom.entry_point[..])?;
         reader.read_exact(&mut rom.logo[..])?;
         reader.read_exact(&mut rom.title[..])?;
-        reader.read_exact(&mut rom.manufacturer_code[..])?;
+
+        rom.manufacturer_code.copy_from_slice(&rom.title[11..15]);
 
         // CGBのみの対応かどうか
-        rom.cgb_flag = match reader.take(1).bytes().next() {
+        rom.cgb_flag = match rom.title.last() {
             // OnlyCGB
-            Some(Ok(0xC0)) => CGBMode::OnlyCGB,
+            Some(0xC0) => CGBMode::OnlyCGB,
             // not only CGB
-            Some(Ok(0x80)) => CGBMode::NotOnlyCGB,
-            Some(Ok(_unknown)) => CGBMode::NotOnlyCGB,
+            Some(0x80) => CGBMode::NotOnlyCGB,
+            Some(_unknown) => CGBMode::NotOnlyCGB,
             _ => bail!("fail! GCBFlag is broken or there is unexpected EOF in CGB flag")
         };
 
@@ -113,7 +114,7 @@ impl Rom {
             Some(Ok(0x52)) => (11 * 1024 * 1024_usize) / 10_usize,
             Some(Ok(0x53)) => (12 * 1024 * 1024_usize) / 10_usize,
             Some(Ok(0x54)) => (15 * 1024 * 1024_usize) / 10_usize,
-            Some(Ok(_unknown)) => bail!("fail! Unknown data in Rom size"),
+            Some(Ok(_unknown)) => bail!("fail! Unknown data in Rom size, actual data is {}", _unknown),
             Some(Err(_err)) => bail!("fail! a byte data of ROM size is broken"),
             None => bail!("fail! There is unexpected EOF in ROM size")
         };
