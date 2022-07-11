@@ -57,14 +57,14 @@ fn main() {
             }
         }
 
-        window.request_redraw();
-
         let duration = start.elapsed().as_micros();
         let frame_microsec: u128 = 1_000_000 / 60;
-
+        
         if duration < frame_microsec {
             let wait_time: u128 = frame_microsec - duration;
             sleep(Duration::from_micros(wait_time as u64));
         }
+
+        window.request_redraw();
     })
 }
