@@ -149,30 +149,52 @@ impl Ppu {
         Ok(())
     }
 
+    pub fn dump(&self) {
+        let start = 0x1000;
+        for i in start..=0x1500 {
+            let mut v = Vec::new();
+            for j in 0..16 {
+                v.push(self.vram[i+j]);
+            }
+            println!("{:X}: {:?}", i+0x8000, v);
+        }
+    }
+
     pub fn bg_fetch(&mut self, scan_line: u8, x_coordinate: u8) {
         let lcd4 = self.read_lcd_bit(4);
         let lcd3 = self.read_lcd_bit(3);
-        let lcd6 = self.read_lcd_bit(6);
 
         // fetch tile number
-        let bg_tile_map_address: u16 = if lcd6 && !lcd3 { 0x1C00 } else { 0x1800 };
+        let bg_tile_map_address: u16 = if lcd3 { 0x1C00 } else { 0x1800 };
 
         let scx: u16 = self.scx as u16;
-        let ly: u16 = self.ly as u16;
+        let ly: u16 = scan_line as u16;
         let scy: u16 = self.scy as u16;
-        // tile_map_idx = ((scx + x_coordinate) / 8) + ((ly + scy) / 8 * 32)
-        let tile_map_idx = scx.wrapping_add(x_coordinate as u16).wrapping_div(8).wrapping_add(ly.wrapping_add(scy).wrapping_mul(4));
+        // tile_map_idx = ((scx + x_coordinate) / 8) + (((ly + scy) / 8) * 32)
+        let tile_map_idx = scx.wrapping_add(x_coordinate as u16).wrapping_div(8).wrapping_add(ly.wrapping_add(scy).wrapping_div(8).wrapping_mul(32));
+        // println!("tile_map_idx = {}", tile_map_idx);
         let tile_number_address: u16 = tile_map_idx + bg_tile_map_address as u16;
+        // println!("tile_number_address = 0x{:X}", tile_number_address + 0x8000);
         let tile_number = self.vram[tile_number_address as usize];
+        // println!("tile_number = {}", tile_number);
 
         // fetch tile data (low)
-        let mut tile_address: usize = if lcd4 { tile_number as usize * 16 } else { (0x1000_i16 + (tile_number as i16)) as usize };
+        let mut tile_address: usize = if lcd4 {
+            tile_number as usize * 16 
+        }
+        else { 
+            let signed_tile_number: i8 = tile_number as i8;
+            (signed_tile_number as i16 * 16 + 0x1000) as usize
+        };
+        // println!("tile_address = 0x{:X}", tile_address+0x8000);
         let tile_vertical_offset = ((ly + scy) % 8) * 2;
         tile_address += tile_vertical_offset as usize;
         let lower_tile_data = self.vram[tile_address];
 
         // fetch tile data (high)
         let higher_tile_data = self.vram[tile_address + 1];
+
+        // println!("tile_data = 0x{:02X} 0x{:02X}", lower_tile_data, higher_tile_data);
 
         // push fifo
         for bit in (0_u8..8).rev() {

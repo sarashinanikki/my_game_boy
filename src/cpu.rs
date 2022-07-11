@@ -18,6 +18,7 @@ pub struct Cpu {
     halt: bool,
     interruption: bool,
     step_flag: bool,
+    debug_flag: bool,
     break_points: Vec<u16>,
     jmp_flag: bool
 }
@@ -45,6 +46,7 @@ impl Cpu {
             halt: Default::default(),
             interruption: Default::default(),
             step_flag: Default::default(),
+            debug_flag: Default::default(),
             break_points: Default::default(),
             jmp_flag: false
         }
@@ -62,6 +64,11 @@ impl Cpu {
             
             // 命令コードを取得
             let opcode: Opcode = self.read_inst()?;
+
+            if self.debug_flag {
+                self.debug_output(&opcode);
+            }
+
             // 命令コードを実行
             let op_cycle: u8 = self.excute_op(&opcode)?;
             // 現在のサイクル数を更新
@@ -114,7 +121,12 @@ impl Cpu {
 
             match command {
                 "n" => break,
-                "debug" => self.debug_output(opcode),
+                "debug" => {
+                    self.debug_flag = !self.debug_flag;
+                },
+                "dump" => {
+                    self.bus.ppu.dump();
+                }
                 "go" => {
                     self.step_flag = false;
                     break;
