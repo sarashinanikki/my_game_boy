@@ -30,7 +30,7 @@ fn main() {
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
     let mut pixels = Pixels::new(160, 144, surface_texture).unwrap();
 
-    let mut reader = BufReader::new(File::open("/home/sarashin/hobby/game_boy_rust/rom/hello-world.gb").unwrap());
+    let mut reader = BufReader::new(File::open("/home/sarashin/Hobby/my_game_boy/rom/hello-world.gb").unwrap());
     let rom = rom::Rom::new(&mut reader).unwrap();
     let mbc = Box::new(mbc::NoMbc{mbc_type: 0, rom});
     let ppu = ppu::Ppu::new();
@@ -49,14 +49,6 @@ fn main() {
 
         cpu.run().unwrap();
 
-        let duration = start.elapsed().as_micros();
-        let frame_microsec: u128 = 1_000_000 / 60;
-
-        if duration < frame_microsec {
-            let wait_time: u128 = frame_microsec - duration;
-            sleep(Duration::from_micros(wait_time as u64));
-        }
-
         if let Event::RedrawRequested(_) = event {
             cpu.render(pixels.get_frame());
             if pixels.render().is_err() {
@@ -66,5 +58,13 @@ fn main() {
         }
 
         window.request_redraw();
+
+        let duration = start.elapsed().as_micros();
+        let frame_microsec: u128 = 1_000_000 / 60;
+
+        if duration < frame_microsec {
+            let wait_time: u128 = frame_microsec - duration;
+            sleep(Duration::from_micros(wait_time as u64));
+        }
     })
 }
