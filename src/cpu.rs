@@ -63,7 +63,6 @@ impl Cpu {
             // 命令コードを取得
             let opcode: Opcode = self.read_inst()?;
             // 命令コードを実行
-            self.debug_output(&opcode);
             let op_cycle: u8 = self.excute_op(&opcode)?;
             // 現在のサイクル数を更新
             current_cycle += op_cycle as usize;

@@ -64,9 +64,6 @@ impl Ppu {
             return;
         }
 
-        println!("self.ly = {}", self.ly);
-        println!("self.current_cycle = {}", self.current_cycle);
-
         self.current_cycle += cycle as usize;
         if self.ly > 143 {
             self.mode = Mode::VBlank;
