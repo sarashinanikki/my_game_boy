@@ -963,7 +963,7 @@ impl Cpu {
     fn jr_z(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
         let mut cycle = 8;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
         let offset: i8 = address as i8;
         let pc = self.PC as isize + offset as isize + 1;
         
@@ -980,7 +980,7 @@ impl Cpu {
     fn jr_nz(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
         let mut cycle = 8;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
         let offset: i8 = address as i8;
         let pc = self.PC as isize + offset as isize + 1;
         
