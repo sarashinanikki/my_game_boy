@@ -57,6 +57,9 @@ impl Cpu {
         // self.step_flag = true;
 
         while current_cycle < max_cycle {
+            if self.get_bc() == 0x800 || self.get_bc() == 0x600 || self.get_bc() == 0x100 || self.get_bc() == 0x0005 {
+                self.step_flag = true;
+            }
             // 現在のPCにブレークポイントが張られていないか確認
             self.check_break_points();
             
@@ -98,6 +101,10 @@ impl Cpu {
         }
     }
 
+    pub fn set_break_point(&mut self, bp: u16) {
+        self.break_points.push(bp);
+    }
+
     // ステップ実行
     fn stepping(&mut self, opcode: &Opcode) {
         // 現状を出力
@@ -111,8 +118,31 @@ impl Cpu {
 
             match command {
                 "n" => break,
-                "d" => self.debug_output(opcode),
-                "go" => self.step_flag = false,
+                "debug" => self.debug_output(opcode),
+                "go" => {
+                    self.step_flag = false;
+                    break;
+                },
+                "set bp" => {
+                    print!("set break point => ");
+                    let mut raw_bp = String::new();
+                    io::stdin().read_line(&mut raw_bp).expect("Failed to read");
+                    let str_bp = raw_bp.trim_start_matches("0x").trim_end();
+                    let bp = u16::from_str_radix(str_bp, 16).unwrap();
+                    self.break_points.push(bp);
+                },
+                "rm bp" => {
+                    print!("remove break point => ");
+                    let mut raw_bp = String::new();
+                    io::stdin().read_line(&mut raw_bp).expect("Failed to read");
+                    let str_bp = raw_bp.trim_start_matches("0x").trim_end();
+                    println!("str_bp = {}", str_bp);
+                    let bp = u16::from_str_radix(str_bp, 16).unwrap();
+                    if let Some(idx) = self.break_points.iter().position(|x| *x == bp) {
+                        self.break_points.remove(idx);
+                        self.step_flag = false;
+                    }
+                },
                 _ => println!("unknown command")
             }
         }
@@ -122,8 +152,9 @@ impl Cpu {
     fn debug_output(&self, opcode: &Opcode) {
         println!(
             "PC: {:X}, opcode: {:X}, CB: {}\n 
-            A: {:X}, B: {:X}, C: {:X}, D: {:X}, E: {:X}, F: {:X}, H: {:X}, L: {:X}, SP: {:X}",
-            self.PC, opcode.code, opcode.cb_prefix, self.A, self.B, self.C, self.D, self.E, self.F, self.H, self.L, self.SP
+            A: {:X}, B: {:X}, C: {:X}, D: {:X}, E: {:X}, F: {:X}, H: {:X}, L: {:X}, SP: {:X}, AF: {:X}, BC: {:X}, DE: {:X}, HL: {:X}",
+            self.PC, opcode.code, opcode.cb_prefix, self.A, self.B, self.C, self.D, self.E, self.F, self.H, self.L, self.SP,
+            self.get_af(), self.get_bc(), self.get_de(), self.get_hl()
         )
     }
 
