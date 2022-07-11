@@ -3786,78 +3786,48 @@ impl Cpu {
 
     #[allow(dead_code)]
     fn ld_06(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.B = res;
-        }
-        else {
-            bail!("fail! error occured in ld_06")
-        }
+        let val = self.read_next_8()?;
+        self.B = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_0E(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.C = res;
-        }
-        else {
-            bail!("fail! error occured in ld_0E")
-        }
+        let val = self.read_next_8()?;
+        self.C = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_16(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.D = res;
-        }
-        else {
-            bail!("fail! error occured in ld_16")
-        }
+        let val = self.read_next_8()?;
+        self.D = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_1E(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.E = res;
-        }
-        else {
-            bail!("fail! error occured in ld_1E")
-        }
+        let val = self.read_next_8()?;
+        self.E = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_26(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.H = res;
-        }
-        else {
-            bail!("fail! error occured in ld_26")
-        }
+        let val = self.read_next_8()?;
+        self.H = val;
 
         Ok(8)
     }
 
     #[allow(dead_code)]
     fn ld_2E(&mut self) -> Result<u8> {
-        self.increment_pc();
-        if let Ok(res) = self.bus.read(self.PC) {
-            self.L = res;
-        }
-        else {
-            bail!("fail! error occured in ld_2E")
-        }
+        let val = self.read_next_8()?;
+        self.L = val;
 
         Ok(8)
     }
