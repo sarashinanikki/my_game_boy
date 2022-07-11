@@ -57,9 +57,6 @@ impl Cpu {
         // self.step_flag = true;
 
         while current_cycle < max_cycle {
-            if self.get_bc() == 0x800 || self.get_bc() == 0x600 || self.get_bc() == 0x100 || self.get_bc() == 0x0005 {
-                self.step_flag = true;
-            }
             // 現在のPCにブレークポイントが張られていないか確認
             self.check_break_points();
             
