@@ -59,14 +59,15 @@ impl Cpu {
         while current_cycle < max_cycle {
             // 現在のPCにブレークポイントが張られていないか確認
             self.check_break_points();
-
+            
             // 命令コードを取得
             let opcode: Opcode = self.read_inst()?;
             // 命令コードを実行
+            self.debug_output(&opcode);
             let op_cycle: u8 = self.excute_op(&opcode)?;
             // 現在のサイクル数を更新
             current_cycle += op_cycle as usize;
-
+            
             self.bus.ppu.tick(op_cycle);
 
             // PCをインクリメント
@@ -81,8 +82,6 @@ impl Cpu {
             if self.step_flag {
                 self.stepping(&opcode);
             }
-
-            self.debug_output(&opcode);
         }
 
         Ok(())
@@ -900,9 +899,11 @@ impl Cpu {
         let address = self.read_next_8()?;
         let mut cycle = 8;
         let c = self.get_carry_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if c {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
             self.jmp_flag = true;
             cycle = 12;
         }
@@ -915,9 +916,11 @@ impl Cpu {
         let address = self.read_next_8()?;
         let mut cycle = 8;
         let c = self.get_carry_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if !c {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
             self.jmp_flag = true;
             cycle = 12;
         }
@@ -930,9 +933,11 @@ impl Cpu {
         let address = self.read_next_8()?;
         let mut cycle = 8;
         let z = self.get_n_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if z {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
             self.jmp_flag = true;
             cycle = 12;
         }
@@ -945,9 +950,11 @@ impl Cpu {
         let address = self.read_next_8()?;
         let mut cycle = 8;
         let z = self.get_n_flag();
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
         
         if !z {
-            self.PC = self.PC.wrapping_add(address as u16);
+            self.PC = pc as u16;
             self.jmp_flag = true;
             cycle = 12;
         }
@@ -958,7 +965,9 @@ impl Cpu {
     #[allow(dead_code)]
     fn jr(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
-        self.PC = self.PC.wrapping_add(address as u16);
+        let offset: i8 = address as i8;
+        let pc = self.PC as isize + offset as isize + 1;
+        self.PC = pc as u16;
         self.jmp_flag = true;
 
         Ok(12)
