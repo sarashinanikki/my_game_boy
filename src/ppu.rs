@@ -30,6 +30,7 @@ pub struct Ppu {
     lyc: u8,
     wy: u8,
     wx: u8,
+    bgp: u8,
     window_line_counter: u8,
     bg_fifo: VecDeque<PixelData>,
     frame_buffer: [[u8; 4]; 160 * 144],
@@ -48,6 +49,7 @@ impl Ppu {
             lyc: Default::default(),
             wy: Default::default(),
             wx: Default::default(),
+            bgp: Default::default(),
             window_line_counter: Default::default(),
             bg_fifo: VecDeque::new(),
             frame_buffer: [[0; 4]; 160 * 144],
@@ -270,6 +272,16 @@ impl Ppu {
     pub fn wx_read(&self) -> Result<u8> {
         let data = self.wx;
         Ok(data)
+    }
+
+    pub fn bgp_read(&self) -> Result<u8> {
+        let data = self.bgp;
+        Ok(data)
+    }
+
+    pub fn bgp_write(&mut self, data: u8) -> Result<()> {
+        self.bgp = data;
+        Ok(())
     }
 
     fn read_lcd_bit(&self, bit: u8) -> bool {
