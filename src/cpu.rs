@@ -74,6 +74,7 @@ impl Cpu {
             // 現在のサイクル数を更新
             current_cycle += op_cycle as usize;
             
+            // PPUをサイクル分動かす
             self.bus.ppu.tick(op_cycle);
 
             // PCをインクリメント
