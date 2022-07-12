@@ -91,6 +91,7 @@ impl Ppu {
                 }
             },
             Mode::VBlank => {
+                self.window_line_counter = 0;
                 if self.current_cycle >= 456 {
                     self.current_cycle = 0;
                     self.ly = (self.ly + 1) % 154;
@@ -113,6 +114,12 @@ impl Ppu {
 
         let scan_line = self.ly;
         for x_position_counter in 0..160 {
+            // check is window rendered
+            if self.is_window_rendering(x_position_counter) {
+                self.bg_fifo.clear();
+                self.window_fetch(x_position_counter);
+            }
+
             // bg fetch
             if self.bg_fifo.is_empty() {
                 self.bg_fetch(scan_line, x_position_counter);
@@ -123,7 +130,7 @@ impl Ppu {
             // merge
 
             // push
-            if x_position_counter == 0 {
+            if x_position_counter == 0 && self.is_window_rendering(x_position_counter) {
                 let discard = self.scx % 8;
                 for _ in 0..discard {
                     self.bg_fifo.pop_front();
@@ -138,6 +145,14 @@ impl Ppu {
             }
         }
 
+    }
+
+    fn is_window_rendering(&self, x_coordinate: u8) -> bool {
+        let lcd5 = self.read_lcd_bit(5);
+        let is_window_line = self.wy == self.ly;
+        let is_window_x_pos = x_coordinate + 7 >= self.wx;
+
+        return lcd5 && is_window_line && is_window_x_pos;
     }
     
 
@@ -170,8 +185,12 @@ impl Ppu {
         let scx: u16 = self.scx as u16;
         let ly: u16 = scan_line as u16;
         let scy: u16 = self.scy as u16;
+        // タイル番号の横幅は0~31までなので0x1f(31)でandする
+        let x_offset = ((scx+x_coordinate as u16) / 8) & 0x1F;
+        let y_offset = ((ly + scy) / 8) * 32;
         // tile_map_idx = ((scx + x_coordinate) / 8) + (((ly + scy) / 8) * 32)
-        let tile_map_idx = scx.wrapping_add(x_coordinate as u16).wrapping_div(8).wrapping_add(ly.wrapping_add(scy).wrapping_div(8).wrapping_mul(32));
+        // タイル番号は32 * 32の0~1023なので0x3FF(1023)でandする
+        let tile_map_idx = (x_offset + y_offset) & 0x3FF;
         // println!("tile_map_idx = {}", tile_map_idx);
         let tile_number_address: u16 = tile_map_idx + bg_tile_map_address as u16;
         // println!("tile_number_address = 0x{:X}", tile_number_address + 0x8000);
@@ -188,6 +207,62 @@ impl Ppu {
         };
         // println!("tile_address = 0x{:X}", tile_address+0x8000);
         let tile_vertical_offset = ((ly + scy) % 8) * 2;
+        tile_address += tile_vertical_offset as usize;
+        let lower_tile_data = self.vram[tile_address];
+
+        // fetch tile data (high)
+        let higher_tile_data = self.vram[tile_address + 1];
+
+        // println!("tile_data = 0x{:02X} 0x{:02X}", lower_tile_data, higher_tile_data);
+
+        // push fifo
+        for bit in (0_u8..8).rev() {
+            let top = if higher_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
+            let bottom = if lower_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
+
+            let pixel_color = top*2 + bottom;
+            let pixel_data = PixelData {
+                color: pixel_color,
+                background_priority: 0,
+                palette: 0,
+                sprite_priority: 0
+            };
+
+            self.bg_fifo.push_back(pixel_data);
+        }
+    }
+
+    pub fn window_fetch(&mut self, x_coordinate: u8) {
+        let lcd4 = self.read_lcd_bit(6);
+        let lcd3 = self.read_lcd_bit(3);
+
+        // fetch tile number
+        let window_tile_map_address: u16 = if lcd3 { 0x1C00 } else { 0x1800 };
+
+        let window_x = x_coordinate.wrapping_sub(self.wx);
+
+        // タイル番号の横幅は0~31までなので0x1f(31)でandする
+        let x_offset = ((window_x as u16) / 8) & 0x1F;
+        let y_offset = ((self.window_line_counter as u16) / 8) * 32;
+        // tile_map_idx = (window_x / 8) + (window_line_counter / 8) * 32)
+        // タイル番号は32 * 32の0~1023なので0x3FF(1023)でandする
+        let tile_map_idx = (x_offset + y_offset) & 0x3FF;
+        // println!("tile_map_idx = {}", tile_map_idx);
+        let tile_number_address: u16 = tile_map_idx + window_tile_map_address as u16;
+        // println!("tile_number_address = 0x{:X}", tile_number_address + 0x8000);
+        let tile_number = self.vram[tile_number_address as usize];
+        // println!("tile_number = {}", tile_number);
+
+        // fetch tile data (low)
+        let mut tile_address: usize = if lcd4 {
+            tile_number as usize * 16 
+        }
+        else { 
+            let signed_tile_number: i8 = tile_number as i8;
+            (signed_tile_number as i16 * 16 + 0x1000) as usize
+        };
+        // println!("tile_address = 0x{:X}", tile_address+0x8000);
+        let tile_vertical_offset = (self.window_line_counter % 8) * 2;
         tile_address += tile_vertical_offset as usize;
         let lower_tile_data = self.vram[tile_address];
 
