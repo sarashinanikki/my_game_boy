@@ -21,6 +21,21 @@ impl Default for Mode {
     }
 }
 
+pub enum Color {
+    White,
+    LightGray,
+    DarkGray,
+    Black
+}
+
+pub struct Palette([Color; 4]);
+
+impl Default for Palette {
+    fn default() -> Self {
+        Self([Color::White, Color::LightGray, Color::DarkGray, Color::Black])
+    }
+}
+
 pub struct Ppu {
     vram: [u8; 0x8192],
     lcd_control: u8,
@@ -33,6 +48,7 @@ pub struct Ppu {
     bgp: u8,
     window_line_counter: u8,
     bg_fifo: VecDeque<PixelData>,
+    bg_color_palette: Palette,
     frame_buffer: [[u8; 4]; 160 * 144],
     current_cycle: usize,
     mode: Mode
@@ -52,6 +68,7 @@ impl Ppu {
             bgp: Default::default(),
             window_line_counter: Default::default(),
             bg_fifo: VecDeque::new(),
+            bg_color_palette: Default::default(),
             frame_buffer: [[0; 4]; 160 * 144],
             current_cycle: Default::default(),
             mode: Default::default()
@@ -73,6 +90,7 @@ impl Ppu {
             Mode::OamScan => {
                 if self.current_cycle >= 80 {
                     self.mode = Mode::Drawing;
+                    self.assign_bg_palette();
                 }
                 // 後で実装
                 
@@ -105,13 +123,6 @@ impl Ppu {
     }
 
     pub fn fetch(&mut self) {
-        // あとでどこかに定数化する
-        let black: [u8; 4] = [0x00, 0x00, 0x00, 0xff];
-        let white: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
-        let dark_gray: [u8; 4] = [0x1e, 0x51, 0x28, 0xff];
-        let light_gray: [u8; 4] = [0xd8, 0xe9, 0xa8, 0xff];
-        let color_palette: [[u8; 4]; 4] = [white, light_gray, dark_gray, black];
-
         let scan_line = self.ly;
         for x_position_counter in 0..160 {
             // check is window rendered
@@ -139,12 +150,46 @@ impl Ppu {
 
 
             let color_idx = self.bg_fifo.pop_front().unwrap().color;
-            let color = color_palette[color_idx as usize];
+            let color = self.apply_bg_pixel_color(color_idx);
             for i in 0..4 {
                 self.frame_buffer[(scan_line as usize * 160 + x_position_counter as usize) as usize][i] = color[i];
             }
         }
 
+    }
+
+    fn assign_bg_palette(&mut self) {
+        for i in 0..4 {
+            let bit = i * 2;
+            let lower_bit = if (self.bgp & (1 << bit)) == (1 << bit) { 1_u8 } else { 0_u8 };
+            let higher_bit = if (self.bgp & 1 << (bit+1)) == (1 << (bit+1)) { 2_u8 } else { 0_u8 };
+            let color_val = higher_bit + lower_bit;
+            
+            let color = match color_val {
+                0 => Color::White,
+                1 => Color::LightGray,
+                2 => Color::DarkGray,
+                _ => Color::Black
+            };
+            
+            self.bg_color_palette.0[i] = color;
+        }
+    }
+
+    fn apply_bg_pixel_color(&self, color_idx: u8) -> [u8; 4] {
+        let black: [u8; 4] = [0x00, 0x00, 0x00, 0xff];
+        let white: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
+        let dark_gray: [u8; 4] = [0x1e, 0x51, 0x28, 0xff];
+        let light_gray: [u8; 4] = [0xd8, 0xe9, 0xa8, 0xff];
+
+        let color = match self.bg_color_palette.0[color_idx as usize] {
+            Color::White => white,
+            Color::LightGray => light_gray,
+            Color::DarkGray => dark_gray,
+            Color::Black => black
+        };
+
+        return color;
     }
 
     fn is_window_rendering(&self, x_coordinate: u8) -> bool {
