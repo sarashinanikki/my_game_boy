@@ -8,6 +8,36 @@ pub enum Mode {
     VBlank
 }
 
+#[derive(Default, Clone, Copy, Debug)]
+pub struct OAM {
+    y_position: u8,
+    x_position: u8,
+    tile_number: u8,
+    sprite_flags: u8
+}
+
+impl OAM {
+    fn get(&self, address: u16) -> u8 {
+        let idx = address % 4;
+        match idx {
+            0 => self.y_position,
+            1 => self.x_position,
+            2 => self.tile_number,
+            _ => self.sprite_flags
+        }
+    }
+
+    fn set(&mut self, address: u16, data: u8) {
+        let idx = address % 4;
+        match idx {
+            0 => self.y_position = data,
+            1 => self.x_position = data,
+            2 => self.tile_number = data,
+            _ => self.sprite_flags = data
+        }
+    }
+}
+
 pub struct PixelData {
     color: u8,
     palette: u8,
@@ -38,6 +68,7 @@ impl Default for Palette {
 
 pub struct Ppu {
     vram: [u8; 0x8192],
+    oam: [OAM; 40],
     lcd_control: u8,
     scy: u8,
     scx: u8,
@@ -58,6 +89,7 @@ impl Ppu {
     pub fn new() -> Self {
         Self {
             vram: [0; 0x8192],
+            oam: [OAM::default(); 40],
             lcd_control: 0x80,
             scy: Default::default(),
             scx: Default::default(),
@@ -340,6 +372,16 @@ impl Ppu {
 
     pub fn read(&self, address: u16) -> Result<u8> {
         let data = self.vram[address as usize];
+        Ok(data)
+    }
+
+    pub fn write_OAM(&mut self, address: u16, data: u8) -> Result<()> {
+        self.oam[address as usize].set(address, data);
+        Ok(())
+    }
+
+    pub fn read_OAM(&self,address: u16) -> Result<u8> {
+        let data = self.oam[address as usize].get(address);
         Ok(data)
     }
 

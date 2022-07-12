@@ -21,7 +21,7 @@ impl Bus {
             0xA000..=0xBFFF => self.mbc.read_ram(address-0xA000),
             0xC000..=0xDFFF => Ok(self.ram[(address-0xC000) as usize]),
             // 0xE000..=0xFDFF => ECHO RAM,
-            // 0xFE00..=0xFE9F => OAM,
+            0xFE00..=0xFE9F => self.ppu.read_OAM(address-0xFE00),
             0xFEA0..=0xFEFF => Ok(0),
             0xFF26 => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
@@ -57,7 +57,7 @@ impl Bus {
                 Ok(())
             },
             // 0xE000..=0xFDFF => ECHO RAM,
-            // 0xFE00..=0xFE9F => OAM,
+            0xFE00..=0xFE9F => self.ppu.write_OAM(address-0xFE00, data),
             0xFEA0..=0xFEFF => Ok(()),
             // 0xFF00..=0xFF7F => IO,
             0xFF26 => Ok(()),
