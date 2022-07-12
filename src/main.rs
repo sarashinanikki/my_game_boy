@@ -1,4 +1,6 @@
 use std::fs::File;
+use dotenvy::dotenv;
+use std::env;
 use std::io::BufReader;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
@@ -17,6 +19,11 @@ mod cpu;
 mod ppu;
 
 fn main() {
+    dotenv().ok();
+    let args: Vec<String> = env::args().collect();
+    let rom_name = &args[1];
+    let base_path = env::var("BASE_PATH").expect("BASE_PATH must be set!");
+
     let mut input = WinitInputHelper::new();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -30,7 +37,8 @@ fn main() {
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
     let mut pixels = Pixels::new(160, 144, surface_texture).unwrap();
 
-    let mut reader = BufReader::new(File::open("/home/sarashin/Hobby/my_game_boy/rom/hello-world.gb").unwrap());
+    let file_path = base_path + rom_name;
+    let mut reader = BufReader::new(File::open(file_path).unwrap());
     let rom = rom::Rom::new(&mut reader).unwrap();
     let mbc = Box::new(mbc::NoMbc{mbc_type: 0, rom});
     let ppu = ppu::Ppu::new();
