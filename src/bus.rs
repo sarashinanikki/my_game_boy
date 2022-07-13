@@ -30,6 +30,7 @@ impl Bus {
             0xFF44 => self.ppu.ly_read(),
             0xFF45 => self.ppu.lyc_read(),
             0xFF47 => self.ppu.bgp_read(),
+            0xFF48..=0xFF49 => self.ppu.read_obp(address),
             0xFF4A => self.ppu.wy_read(),
             0xFF4B => self.ppu.wx_read(),
             // 0xFF00..=0xFF7F => IO,
@@ -67,6 +68,7 @@ impl Bus {
             0xFF44 => self.ppu.ly_write(data),
             0xFF45 => self.ppu.lyc_write(data),
             0xFF47 => self.ppu.bgp_write(data),
+            0xFF48..=0xFF49 => self.ppu.write_obp(address, data),
             0xFF4A => self.ppu.wy_write(data),
             0xFF4B => self.ppu.wx_write(data),
             0xFF80..=0xFFFE => {
