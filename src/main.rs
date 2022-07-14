@@ -44,7 +44,6 @@ fn main() {
     let ppu = ppu::Ppu::new();
     let bus = bus::Bus::new(mbc, ppu);
     let mut cpu = cpu::Cpu::new(bus);
-    cpu.set_break_point(0x1A);
     
     event_loop.run(move |event, _, control_flow| {
         let start = Instant::now();

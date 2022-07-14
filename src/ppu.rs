@@ -86,7 +86,9 @@ pub struct Ppu {
     obp_color_palette: [Palette; 2],
     frame_buffer: [[u8; 4]; 160 * 144],
     current_cycle: usize,
-    mode: Mode
+    pub mode: Mode,
+    pub int_vblank: bool,
+    pub int_lcd_stat: bool
 }
 
 impl Ppu {
@@ -111,7 +113,9 @@ impl Ppu {
             obp_color_palette: Default::default(),
             frame_buffer: [[0; 4]; 160 * 144],
             current_cycle: Default::default(),
-            mode: Default::default()
+            mode: Default::default(),
+            int_vblank: Default::default(),
+            int_lcd_stat: Default::default()
         }
     }
 
@@ -122,8 +126,9 @@ impl Ppu {
         }
 
         self.current_cycle += cycle as usize;
-        if self.ly > 143 {
+        if self.ly == 144 {
             self.mode = Mode::VBlank;
+            self.int_vblank = true;
         }
 
         match self.mode {
