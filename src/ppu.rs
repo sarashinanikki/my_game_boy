@@ -171,6 +171,10 @@ impl Ppu {
 
     fn oam_scan(&mut self) {
         self.sprite_buffer.clear();
+        if !self.read_lcd_bit(1) {
+            return;
+        }
+
         let sprite_height = if self.read_lcd_bit(2) { 16u8 } else { 8u8 };
         for (i, sp) in self.oam.iter().enumerate() {
             if sp.x_position > 0 && self.ly + 16 >= sp.y_position &&
@@ -207,20 +211,16 @@ impl Ppu {
             }
 
             // sprite fetch
-            if self.sprite_fifo.is_empty() {
+            if self.sprite_fifo.is_empty() && self.read_lcd_bit(1) {
                 self.oam_fetch(x_position_counter);
             }
 
-            // merge
-
-            // push
             if x_position_counter == 0 && self.is_window_rendering(x_position_counter) {
                 let discard = self.scx % 8;
                 for _ in 0..discard {
                     self.bg_fifo.pop_front();
                 }
             }
-
 
             let bg_color_idx = self.bg_fifo.pop_front().unwrap().color;
             let sprite_pixel = self.sprite_fifo.pop_front().unwrap_or(PixelData{
@@ -230,6 +230,7 @@ impl Ppu {
                 sprite_priority: 0
             });
 
+            // merge
             let color = match sprite_pixel.color {
                 0 => self.apply_bg_pixel_color(bg_color_idx),
                 _ => {
@@ -238,12 +239,14 @@ impl Ppu {
                     }
                     else {
                         let sp_color_idx = sprite_pixel.color;
+                        // println!("x = {}, y = {}, color_idx = {}", x_position_counter, self.ly, sp_color_idx);
                         let palette = sprite_pixel.palette;
                         self.apply_sprite_pixel_color(sp_color_idx, palette)
                     }
                 }
             };
 
+            // push
             for i in 0..4 {
                 self.frame_buffer[(scan_line as usize * 160 + x_position_counter as usize) as usize][i] = color[i];
             }
@@ -578,12 +581,12 @@ impl Ppu {
     }
 
     pub fn write_OAM(&mut self, address: u16, data: u8) -> Result<()> {
-        self.oam[address as usize].set(address, data);
+        self.oam[address as usize / 4].set(address, data);
         Ok(())
     }
 
     pub fn read_OAM(&self,address: u16) -> Result<u8> {
-        let data = self.oam[address as usize].get(address);
+        let data = self.oam[address as usize / 4].get(address);
         Ok(data)
     }
 
