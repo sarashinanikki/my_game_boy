@@ -399,6 +399,66 @@ Background FIFOにピクセルデータを積むことについては、Pixel Fe
 
 取ってきたピクセルデータをBackgroundかSprite FIFOに積みます。
 
+##### pixel fetcherの実装
+
+```rs
+fn bg_fetch(&mut self, scan_line: u8, x_coordinate: u8) {
+    let lcd4 = self.read_lcd_bit(4);
+    let lcd3 = self.read_lcd_bit(3);
+
+    // fetch tile number
+    let bg_tile_map_address: u16 = if lcd3 { 0x1C00 } else { 0x1800 };
+
+    let scx: u16 = self.scx as u16;
+    let ly: u16 = scan_line as u16;
+    let scy: u16 = self.scy as u16;
+    // タイル番号の横幅は0~31までなので0x1f(31)でandする
+    let x_offset = ((scx+x_coordinate as u16) / 8) & 0x1F;
+    let y_offset = ((ly + scy) / 8) * 32;
+    // tile_map_idx = ((scx + x_coordinate) / 8) + (((ly + scy) / 8) * 32)
+    // タイル番号は32 * 32の0~1023なので0x3FF(1023)でandする
+    let tile_map_idx = (x_offset + y_offset) & 0x3FF;
+    // println!("tile_map_idx = {}", tile_map_idx);
+    let tile_number_address: u16 = tile_map_idx + bg_tile_map_address as u16;
+    // println!("tile_number_address = 0x{:X}", tile_number_address + 0x8000);
+    let tile_number = self.vram[tile_number_address as usize];
+    // println!("tile_number = {}", tile_number);
+
+    let mut tile_address: usize = if lcd4 {
+        tile_number as usize * 16 
+    }
+    else { 
+        let signed_tile_number: i8 = tile_number as i8;
+        (signed_tile_number as i16 * 16 + 0x1000) as usize
+    };
+
+    let tile_vertical_offset = ((ly + scy) % 8) * 2;
+    tile_address += tile_vertical_offset as usize;
+    
+    // fetch tile data (low)
+    let lower_tile_data = self.vram[tile_address];
+
+    // fetch tile data (high)
+    let higher_tile_data = self.vram[tile_address + 1];
+
+    // push fifo
+    for bit in (0_u8..8).rev() {
+        let top = if higher_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
+        let bottom = if lower_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
+
+        let pixel_color = top*2 + bottom;
+        let pixel_data = PixelData {
+            color: pixel_color,
+            background_priority: 0,
+            palette: 0,
+            sprite_priority: 0
+        };
+
+        self.bg_fifo.push_back(pixel_data);
+    }
+}
+```
+
 ### 実装
 
 では実装します。
@@ -456,3 +516,25 @@ pub fn run(&mut self) -> Result<()> {
 動いた〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜！！！！！！！
 
 ひとまず背景の描画はこれで大丈夫そうです。ここからは残りの画面周りを実装して、テストROMをひたすら動かしてデバッグしていく感じですかね。それが終わればコントローラの割込処理などを行おうと思います。
+
+## 第五回
+
+さて、背景描画を実装できたので、次はspriteのテストROMを動かしたいです。
+
+動かすROMは[ここ](https://github.com/dusterherz/gb-hello-world/blob/master/sprite/main.asm)にあるコードをビルドしたものですね。
+
+### スプライトの描画処理の実装
+
+#### OAM scanの実装
+
+#### OAM fetchの実装
+
+#### Background FIFOとピクセルデータをマージする
+
+### 割り込み処理の実装
+
+asmコードをぐっと睨むとinterruptsという文字が見えますね......。vblankを待ってからOAMにアクセスしようとする処理なのですが、vblankが来るまでhaltして、vblankに入った瞬間割り込みをかけてhaltを解除するというやり方で実現しているようです。
+
+現在はその割り込み処理が実装されていないため、まずこれを実装していきます。
+
+#### imeがfalseでもhalt自体は解除される
