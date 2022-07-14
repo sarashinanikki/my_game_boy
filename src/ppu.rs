@@ -388,7 +388,7 @@ impl Ppu {
                 let higher_tile_data = self.vram[tile_address + 1];
 
                 for i in 0..8_u8 {
-                    let bit = if x_flip { 7-i } else { i };
+                    let bit = if !x_flip { 7-i } else { i };
                     let top = if higher_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
                     let bottom = if lower_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
 
