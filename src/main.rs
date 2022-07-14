@@ -5,7 +5,7 @@ use std::io::BufReader;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
 
-use winit::event::{Event, VirtualKeyCode};
+use winit::event::{Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit::dpi::LogicalSize;
@@ -46,33 +46,37 @@ fn main() {
     let mut cpu = cpu::Cpu::new(bus);
     
     event_loop.run(move |event, _, control_flow| {
-        let start = Instant::now();
-
-        if input.update(&event) {
-            if input.key_released(VirtualKeyCode::Escape) || input.quit() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-        }
-
-        cpu.run().unwrap();
-
-        if let Event::RedrawRequested(_) = event {
-            cpu.render(pixels.get_frame());
-            if pixels.render().is_err() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-        }
-
-        let duration = start.elapsed().as_micros();
-        let frame_microsec: u128 = 1_000_000 / 60;
+        match event {
+            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => *control_flow = ControlFlow::Exit,
+            Event::MainEventsCleared => {
+                if input.update(&event) {
+                    if input.key_released(VirtualKeyCode::Escape) || input.quit() {
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
+                }
+                
+                let start = Instant::now();
+                cpu.run().unwrap();
+                let duration = start.elapsed().as_micros();
+                let frame_microsec: u128 = 1_000_000 / 60;
+                
+                if duration < frame_microsec {
+                    let wait_time: u128 = frame_microsec - duration;
+                    sleep(Duration::from_micros(wait_time as u64));
+                }
         
-        if duration < frame_microsec {
-            let wait_time: u128 = frame_microsec - duration;
-            sleep(Duration::from_micros(wait_time as u64));
+                window.request_redraw();                
+            }
+            Event::RedrawRequested(_) => {
+                cpu.render(pixels.get_frame());
+                if pixels.render().is_err() {
+                    *control_flow = ControlFlow::Exit;
+                    return;
+                }
+                *control_flow = ControlFlow::Poll;
+            },
+            _ => {}
         }
-
-        window.request_redraw();
     })
 }

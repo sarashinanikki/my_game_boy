@@ -74,8 +74,6 @@ impl Cpu {
     
                 // 命令コードを実行
                 op_cycle = self.excute_op(&opcode)?;
-                // 現在のサイクル数を更新
-                current_cycle += op_cycle as usize;
 
                 // ステップ実行が有効化されていた場合はステップ実行に
                 if self.step_flag {
@@ -94,10 +92,12 @@ impl Cpu {
             // 割り込みのフラグを立たせる
             self.update_interrupt();
 
-            op_cycle += self.check_interrupt();
-            
             // PPUをサイクル分動かす
+            op_cycle += self.check_interrupt();
             self.bus.ppu.tick(op_cycle);
+
+            // 現在のサイクル数を更新
+            current_cycle += op_cycle as usize;
         }
 
         Ok(())
