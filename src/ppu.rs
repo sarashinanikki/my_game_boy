@@ -293,10 +293,10 @@ impl Ppu {
     }
 
     fn apply_bg_pixel_color(&self, color_idx: u8) -> [u8; 4] {
-        let black: [u8; 4] = [0x00, 0x00, 0x00, 0xff];
-        let white: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
-        let dark_gray: [u8; 4] = [0x1e, 0x51, 0x28, 0xff];
-        let light_gray: [u8; 4] = [0xd8, 0xe9, 0xa8, 0xff];
+        let black: [u8; 4] = [0x0f, 0x38, 0x0f, 0xff];
+        let dark_gray: [u8; 4] = [0x30, 0x62, 0x30, 0xff];
+        let light_gray: [u8; 4] = [0x8b, 0xac, 0x0f, 0xff];
+        let white: [u8; 4] = [0x9b, 0xbc, 0x7f, 0xff];
 
         let color = match self.bg_color_palette.0[color_idx as usize] {
             Color::White => white,
@@ -309,10 +309,10 @@ impl Ppu {
     }
 
     fn apply_sprite_pixel_color(&self, color_idx: u8, palette: u8) -> [u8; 4] {
-        let black: [u8; 4] = [0x00, 0x00, 0x00, 0xff];
-        let white: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
-        let dark_gray: [u8; 4] = [0x1e, 0x51, 0x28, 0xff];
-        let light_gray: [u8; 4] = [0xd8, 0xe9, 0xa8, 0xff];
+        let black: [u8; 4] = [0x0f, 0x38, 0x0f, 0xff];
+        let dark_gray: [u8; 4] = [0x30, 0x62, 0x30, 0xff];
+        let light_gray: [u8; 4] = [0x8b, 0xac, 0x0f, 0xff];
+        let white: [u8; 4] = [0x9b, 0xbc, 0x7f, 0xff];
 
         let color = match self.obp_color_palette[palette as usize].0[color_idx as usize] {
             Color::White => white,
