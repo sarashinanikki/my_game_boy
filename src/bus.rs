@@ -1,12 +1,13 @@
 use anyhow::{Result, bail};
 
-use crate::{mbc::Mbc, ppu::Ppu};
+use crate::{mbc::Mbc, ppu::Ppu, joypad::{Joypad,Button}};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
     pub hram: [u8; 0x127],
     pub ppu: Ppu,
     pub mbc: Box<dyn Mbc>,
+    pub joypad: Joypad,
     // interrupt enable
     pub ie_flag: u8,
     // interrupt flag
@@ -20,6 +21,7 @@ impl Bus {
             hram: [0; 0x127],
             ppu,
             mbc,
+            joypad: Default::default(),
             ie_flag: Default::default(),
             int_flag: Default::default()
         }
@@ -34,6 +36,8 @@ impl Bus {
             // 0xE000..=0xFDFF => ECHO RAM,
             0xFE00..=0xFE9F => self.ppu.read_OAM(address-0xFE00),
             0xFEA0..=0xFEFF => Ok(0),
+            0xFF00 => Ok(self.joypad.read()),
+            // 0xFF01..=0xFF7F => IO,
             0xFF26 => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF42 => self.ppu.scy_read(),
@@ -44,7 +48,6 @@ impl Bus {
             0xFF48..=0xFF49 => self.ppu.read_obp(address),
             0xFF4A => self.ppu.wy_read(),
             0xFF4B => self.ppu.wx_read(),
-            // 0xFF00..=0xFF7F => IO,
             0xFF0F => Ok(self.int_flag),
             0xFF80..=0xFFFE => Ok(self.hram[(address-0xFF80) as usize]),
             0xFFFF => Ok(self.ie_flag),
@@ -72,7 +75,11 @@ impl Bus {
             // 0xE000..=0xFDFF => ECHO RAM,
             0xFE00..=0xFE9F => self.ppu.write_OAM(address-0xFE00, data),
             0xFEA0..=0xFEFF => Ok(()),
-            // 0xFF00..=0xFF7F => IO,
+            0xFF00 => {
+                self.joypad.write(data);
+                Ok(())
+            }
+            // 0xFF01..=0xFF7F => IO,
             0xFF0F => {
                 self.int_flag = data;
                 Ok(())
