@@ -38,10 +38,10 @@ impl Joypad {
         // ボタンの状態を読み込む
         if !self.p15 {
             let mut ret = 0x1F;
-            ret = ret & !((self.start as u8) << 3);
-            ret = ret & !((self.select as u8) << 2);
-            ret = ret & !((self.b as u8) << 1);
-            ret = ret & !((self.a as u8) << 0);
+            ret &= !((self.start as u8) << 3);
+            ret &= !((self.select as u8) << 2);
+            ret &= !((self.b as u8) << 1);
+            ret &= !((self.a as u8) << 0);
 
             return ret
         }
@@ -49,10 +49,10 @@ impl Joypad {
         // 十字キーの状態を読み込む
         if !self.p14 {
             let mut ret = 0x2F;
-            ret = ret & !((self.down as u8) << 3);
-            ret = ret & !((self.up as u8) << 2);
-            ret = ret & !((self.left as u8) << 1);
-            ret = ret & !((self.right as u8) << 0);
+            ret &= !((self.down as u8) << 3);
+            ret &= !((self.up as u8) << 2);
+            ret &= !((self.left as u8) << 1);
+            ret &= !((self.right as u8) << 0);
 
             return ret
         }
