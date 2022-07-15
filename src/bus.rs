@@ -79,13 +79,13 @@ impl Bus {
             0xFF00 => {
                 self.joypad.write(data);
                 Ok(())
-            }
+            },
             0xFF01 => self.ppu.write_lcd_stat(data),
             // 0xFF02..=0xFF7F => IO,
             0xFF0F => {
                 self.int_flag = data;
                 Ok(())
-            }
+            },
             0xFF26 => Ok(()),
             0xFF40 => self.ppu.lcd_control_write(data),
             0xFF42 => self.ppu.scy_write(data),
