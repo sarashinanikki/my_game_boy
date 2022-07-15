@@ -1,11 +1,12 @@
 use std::fs::File;
 use dotenvy::dotenv;
+use joypad::Button;
 use std::env;
 use std::io::BufReader;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
 
-use winit::event::{Event, VirtualKeyCode, WindowEvent};
+use winit::event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit::dpi::LogicalSize;
@@ -17,6 +18,7 @@ mod mbc;
 mod bus;
 mod cpu;
 mod ppu;
+mod joypad;
 
 fn main() {
     dotenv().ok();
@@ -44,10 +46,75 @@ fn main() {
     let ppu = ppu::Ppu::new();
     let bus = bus::Bus::new(mbc, ppu);
     let mut cpu = cpu::Cpu::new(bus);
+    cpu.set_break_point(0x15A);
     
     event_loop.run(move |event, _, control_flow| {
         match event {
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => *control_flow = ControlFlow::Exit,
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => {
+                    *control_flow = ControlFlow::Exit
+                },
+                WindowEvent::KeyboardInput { 
+                    input:
+                        KeyboardInput {
+                            virtual_keycode: Some(virtual_code),
+                            state: button_state,
+                            ..
+                        },
+                    ..
+                } => match virtual_code {
+                    VirtualKeyCode::E => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::Up),
+                            ElementState::Released => cpu.bus.joypad.release(Button::Up)
+                        }
+                    },
+                    VirtualKeyCode::D => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::Down),
+                            ElementState::Released => cpu.bus.joypad.release(Button::Down)
+                        }
+                    }
+                    VirtualKeyCode::S => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::Left),
+                            ElementState::Released => cpu.bus.joypad.release(Button::Left)
+                        }
+                    }
+                    VirtualKeyCode::F => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::Right),
+                            ElementState::Released => cpu.bus.joypad.release(Button::Right)
+                        }
+                    },
+                    VirtualKeyCode::J => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::B),
+                            ElementState::Released => cpu.bus.joypad.release(Button::B)
+                        }
+                    },
+                    VirtualKeyCode::K => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::A),
+                            ElementState::Released => cpu.bus.joypad.release(Button::A)
+                        }
+                    },
+                    VirtualKeyCode::G => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::Select),
+                            ElementState::Released => cpu.bus.joypad.release(Button::Select)
+                        }
+                    },
+                    VirtualKeyCode::H => {
+                        match button_state {
+                            ElementState::Pressed => cpu.bus.joypad.press(Button::Start),
+                            ElementState::Released => cpu.bus.joypad.release(Button::Start)
+                        }
+                    },
+                    _ => {}
+                },
+                _ => {}
+            },
             Event::MainEventsCleared => {
                 if input.update(&event) {
                     if input.key_released(VirtualKeyCode::Escape) || input.quit() {
@@ -55,7 +122,7 @@ fn main() {
                         return;
                     }
                 }
-                
+
                 let start = Instant::now();
                 cpu.run().unwrap();
                 let duration = start.elapsed().as_micros();

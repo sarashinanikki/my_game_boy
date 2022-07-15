@@ -20,7 +20,8 @@ pub struct Joypad {
     select: bool,
     start: bool,
     p15: bool,
-    p14: bool
+    p14: bool,
+    pub int_flag: bool
 }
 
 impl Joypad {
@@ -60,6 +61,7 @@ impl Joypad {
     }
 
     pub fn press(&mut self, button: Button) {
+        self.int_flag = true;
         match button {
             Button::Right => self.right = true,
             Button::Left => self.left = true,

@@ -14,7 +14,7 @@ pub struct Cpu {
     L: u8,
     SP: u16,
     PC: u16,
-    bus: Bus,
+    pub bus: Bus,
     halt: bool,
     ime: bool,
     step_flag: bool,
@@ -112,6 +112,11 @@ impl Cpu {
         if self.bus.ppu.int_lcd_stat {
             self.bus.ppu.int_lcd_stat = false;
             self.bus.int_flag |= 1 << 1;
+        }
+
+        if self.bus.joypad.int_flag {
+            self.bus.joypad.int_flag = false;
+            self.bus.int_flag |= 1 << 4;
         }
     }
 
