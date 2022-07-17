@@ -1563,7 +1563,7 @@ impl Cpu {
         let c_flag = self.get_carry_flag();
         let h_flag = self.get_half_carry_flag();
 
-        let mut c_new_flag = false;
+        let mut c_new_flag = c_flag;
 
         if !n_flag {
             if c_flag || self.A > 0x99 {
