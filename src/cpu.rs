@@ -2,7 +2,7 @@ use std::io;
 
 use anyhow::{bail, Result};
 
-use crate::bus::Bus;
+use crate::{bus::Bus, ppu::Mode};
 pub struct Cpu {
     A: u8,
     B: u8,
@@ -16,7 +16,7 @@ pub struct Cpu {
     PC: u16,
     bus: Bus,
     halt: bool,
-    interruption: bool,
+    ime: bool,
     step_flag: bool,
     debug_flag: bool,
     break_points: Vec<u16>,
@@ -40,11 +40,11 @@ impl Cpu {
             F: Default::default(),
             H: Default::default(),
             L: Default::default(),
-            SP: Default::default(),
+            SP: 0xFFFE,
             PC: 0x100,
             bus,
             halt: Default::default(),
-            interruption: Default::default(),
+            ime: Default::default(),
             step_flag: Default::default(),
             debug_flag: Default::default(),
             break_points: Default::default(),
@@ -61,37 +61,94 @@ impl Cpu {
         while current_cycle < max_cycle {
             // 現在のPCにブレークポイントが張られていないか確認
             self.check_break_points();
-            
-            // 命令コードを取得
-            let opcode: Opcode = self.read_inst()?;
+            // halt時は4サイクルずつPPUなどを進める
+            let mut op_cycle = 4;
 
-            if self.debug_flag {
-                self.debug_output(&opcode);
+            if !self.halt {
+                // 命令コードを取得
+                let opcode: Opcode = self.read_inst()?;
+    
+                if self.debug_flag {
+                    self.debug_output(&opcode);
+                }
+    
+                // 命令コードを実行
+                op_cycle = self.excute_op(&opcode)?;
+
+                // ステップ実行が有効化されていた場合はステップ実行に
+                if self.step_flag {
+                    self.stepping(&opcode);
+                }
+                
+                // PCをインクリメント
+                if !self.jmp_flag {
+                    self.increment_pc();
+                }
+                else {
+                    self.jmp_flag = false;
+                }
             }
 
-            // 命令コードを実行
-            let op_cycle: u8 = self.excute_op(&opcode)?;
-            // 現在のサイクル数を更新
-            current_cycle += op_cycle as usize;
-            
+            // 割り込みのフラグを立たせる
+            self.update_interrupt();
+
             // PPUをサイクル分動かす
+            op_cycle += self.check_interrupt();
             self.bus.ppu.tick(op_cycle);
 
-            // PCをインクリメント
-            if !self.jmp_flag {
-                self.increment_pc();
-            }
-            else {
-                self.jmp_flag = false;
-            }
-
-            // ステップ実行が有効化されていた場合はステップ実行に
-            if self.step_flag {
-                self.stepping(&opcode);
-            }
+            // 現在のサイクル数を更新
+            current_cycle += op_cycle as usize;
         }
 
         Ok(())
+    }
+
+    fn update_interrupt(&mut self) {
+        if self.bus.ppu.int_vblank {
+            self.bus.ppu.int_vblank = false;
+            self.bus.int_flag |= 1 << 0;
+        }
+
+        if self.bus.ppu.int_lcd_stat {
+            self.bus.ppu.int_lcd_stat = false;
+            self.bus.int_flag |= 1 << 1;
+        }
+    }
+
+    fn check_interrupt(&mut self) -> u8 {
+        let interrupt_flags = self.bus.int_flag & self.bus.ie_flag;
+
+        if interrupt_flags != 0 {
+            let mut interrupt_idx = 0;
+            for bit in 0..5_u8 {
+                if interrupt_flags & (1 << bit) == (1 << bit) {
+                    interrupt_idx = bit;
+                    return self.handle_interrupt(interrupt_idx)
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    fn handle_interrupt(&mut self, interrupt_idx: u8) -> u8 {
+        // self.bus.int_flag &= !(1 << interrupt_idx);
+        self.halt = false;
+
+        let address = match interrupt_idx {
+            0 => 0x40,
+            1 => 0x48,
+            2 => 0x50,
+            3 => 0x58,
+            _ => 0x60
+        };
+
+        if self.ime {
+            self.ime = false;
+            self.base_call(address).unwrap();
+        }
+
+        return 12;
     }
 
     pub fn render(&mut self, frame: &mut [u8]) {
@@ -711,7 +768,7 @@ impl Cpu {
         self.increment_sp();
 
         // 割り込みを有効化
-        self.interruption = true;
+        self.ime = true;
         Ok(16)
     }
 
@@ -758,7 +815,7 @@ impl Cpu {
     #[allow(dead_code)]
     fn ret_z(&mut self) -> Result<u8> {
         let mut cycle = 8;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
         
         if z {
             let stack_address = self.SP;
@@ -778,7 +835,7 @@ impl Cpu {
     #[allow(dead_code)]
     fn ret_nz(&mut self) -> Result<u8> {
         let mut cycle = 8;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
         
         if !z {
             let stack_address = self.SP;
@@ -823,14 +880,7 @@ impl Cpu {
             _ => bail!("invalid rst opcode!")
         };
         
-        // 2byteのデータを積むので2回デクリメント
-        self.decrement_sp();
-        self.decrement_sp();
-
-        let stack_address = self.SP;
-        self.bus.write_16(stack_address, self.PC)?;
-        self.PC = address;
-        self.jmp_flag = true;
+        self.base_call(address)?;
 
         Ok(16)
     }
@@ -838,19 +888,12 @@ impl Cpu {
     #[allow(dead_code)]
     fn call_c(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 12;
+        let mut cycle = 6;
         let c = self.get_carry_flag();
         
         if c {
-            // 2byteのデータを積むので2回デクリメント
-            self.decrement_sp();
-            self.decrement_sp();
-
-            let stack_address = self.SP;
-            self.bus.write_16(stack_address, self.PC)?;
-            self.PC = address;
-            self.jmp_flag = true;
-            cycle = 24;
+            self.base_call(address)?;
+            cycle = 12;
         }
 
         Ok(cycle)
@@ -859,19 +902,12 @@ impl Cpu {
     #[allow(dead_code)]
     fn call_nc(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 12;
+        let mut cycle = 6;
         let c = self.get_carry_flag();
         
         if !c {
-            // 2byteのデータを積むので2回デクリメント
-            self.decrement_sp();
-            self.decrement_sp();
-
-            let stack_address = self.SP;
-            self.bus.write_16(stack_address, self.PC)?;
-            self.PC = address;
-            self.jmp_flag = true;
-            cycle = 24;
+            self.base_call(address)?;
+            cycle = 12;
         }
 
         Ok(cycle)
@@ -880,19 +916,12 @@ impl Cpu {
     #[allow(dead_code)]
     fn call_z(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 12;
-        let z = self.get_n_flag();
+        let mut cycle = 6;
+        let z = self.get_zero_flag();
         
         if z {
-            // 2byteのデータを積むので2回デクリメント
-            self.decrement_sp();
-            self.decrement_sp();
-
-            let stack_address = self.SP;
-            self.bus.write_16(stack_address, self.PC)?;
-            self.PC = address;
-            self.jmp_flag = true;
-            cycle = 24;
+            self.base_call(address)?;
+            cycle = 12;
         }
 
         Ok(cycle)
@@ -901,19 +930,12 @@ impl Cpu {
     #[allow(dead_code)]
     fn call_nz(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 12;
-        let z = self.get_n_flag();
+        let mut cycle = 6;
+        let z = self.get_zero_flag();
         
         if !z {
-            // 2byteのデータを積むので2回デクリメント
-            self.decrement_sp();
-            self.decrement_sp();
-
-            let stack_address = self.SP;
-            self.bus.write_16(stack_address, self.PC)?;
-            self.PC = address;
-            self.jmp_flag = true;
-            cycle = 24;
+            self.base_call(address)?;
+            cycle = 12;
         }
 
         Ok(cycle)
@@ -922,16 +944,21 @@ impl Cpu {
     #[allow(dead_code)]
     fn call(&mut self) -> Result<u8> {
         let address = self.read_next_16()?;
+        self.base_call(address)?;
+        Ok(12)
+    }
+
+    fn base_call(&mut self, address: u16) -> Result<()> {
         // 2byteのデータを積むので2回デクリメント
         self.decrement_sp();
         self.decrement_sp();
 
         let stack_address = self.SP;
-        self.bus.write_16(stack_address, self.PC)?;
+        self.bus.write_16(stack_address, self.PC.wrapping_add(1))?;
         self.PC = address;
         self.jmp_flag = true;
 
-        Ok(24)
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -1056,7 +1083,7 @@ impl Cpu {
     fn jp_z(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
         let mut cycle = 12;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
         
         if z {
             self.PC = address;
@@ -1071,7 +1098,7 @@ impl Cpu {
     fn jp_nz(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
         let mut cycle = 12;
-        let z = self.get_n_flag();
+        let z = self.get_zero_flag();
         
         if !z {
             self.PC = address;
@@ -1463,13 +1490,13 @@ impl Cpu {
 
     #[allow(dead_code)]
     fn ei(&mut self) -> Result<u8> {
-        self.interruption = true;
+        self.ime = true;
         Ok(4)
     }
     
     #[allow(dead_code)]
     fn di(&mut self) -> Result<u8> {
-        self.interruption = false;
+        self.ime = false;
         Ok(4)
     }
 
