@@ -128,11 +128,6 @@ impl Ppu {
         }
 
         self.current_cycle += cycle as usize;
-        if self.ly == 144 {
-            self.mode = Mode::VBlank;
-            self.handle_mode1_interrupt();
-            self.int_vblank = true;
-        }
 
         match self.mode {
             Mode::OamScan => {
@@ -158,6 +153,11 @@ impl Ppu {
                     self.handle_mode2_interrupt();
                     self.current_cycle = 0;
                     self.ly += 1;
+                    if self.ly == 144 {
+                        self.mode = Mode::VBlank;
+                        self.int_vblank = true;
+                        self.handle_mode1_interrupt();
+                    }
                 }
             },
             Mode::VBlank => {
@@ -204,6 +204,8 @@ impl Ppu {
 
     fn fetch(&mut self) {
         let scan_line = self.ly;
+        self.bg_fifo.clear();
+        self.sprite_fifo.clear();
         for x_position_counter in 0..160 {
             // check is window rendered
             if self.is_window_rendering(x_position_counter) {
@@ -221,7 +223,7 @@ impl Ppu {
                 self.oam_fetch(x_position_counter);
             }
 
-            if x_position_counter == 0 && self.is_window_rendering(x_position_counter) {
+            if x_position_counter == 0 && !self.is_window_rendering(x_position_counter) {
                 let discard = self.scx % 8;
                 for _ in 0..discard {
                     self.bg_fifo.pop_front();
