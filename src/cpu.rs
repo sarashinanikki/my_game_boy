@@ -609,7 +609,7 @@ impl Cpu {
                     0x7C => self.ld_7C(),
                     0x7D => self.ld_7D(),
                     0x7E => self.ld_7E(),
-                    _ => Ok(0)
+                    _ => bail!("unknown opcode!")
                 }
             },
             Opcode { cb_prefix: true, code: res } => {
@@ -625,8 +625,7 @@ impl Cpu {
                     0x38..=0x3F => self.srl_CB(res),
                     0x40..=0x7F => self.bit_CB(res),
                     0x80..=0xBF => self.res_CB(res),
-                    0xC0..=0xFF => self.set_CB(res),
-                    _ => Ok(0)
+                    0xC0..=0xFF => self.set_CB(res)
                 }
             }
         }
