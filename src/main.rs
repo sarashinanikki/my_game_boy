@@ -46,7 +46,7 @@ fn main() {
     let ppu = ppu::Ppu::new();
     let bus = bus::Bus::new(mbc, ppu);
     let mut cpu = cpu::Cpu::new(bus);
-    cpu.set_break_point(0x15A);
+    // cpu.set_break_point(0x01DE);
     
     event_loop.run(move |event, _, control_flow| {
         match event {

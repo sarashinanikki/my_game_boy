@@ -137,7 +137,7 @@ impl Cpu {
     }
 
     fn handle_interrupt(&mut self, interrupt_idx: u8) -> u8 {
-        // self.bus.int_flag &= !(1 << interrupt_idx);
+        self.bus.int_flag &= !(1 << interrupt_idx);
         self.halt = false;
 
         let address = match interrupt_idx {
@@ -371,6 +371,7 @@ impl Cpu {
         match opcode {
             Opcode { cb_prefix: false, code: res } => {
                 match res {
+                    0xD9 => self.reti(),
                     0xD8 => self.ret_c(),
                     0xD0 => self.ret_nc(),
                     0xC8 => self.ret_z(),
@@ -704,7 +705,7 @@ impl Cpu {
         let upper: u8 = target & 0xF0;
         let lower: u8 = target & 0x0F;
 
-        let new_value: u8 = (lower << 4) + upper;
+        let new_value: u8 = (lower << 4) + (upper >> 4);
         return new_value;
     }
 
@@ -712,7 +713,7 @@ impl Cpu {
         let upper: u16 = target & 0xFF00;
         let lower: u16 = target & 0x00FF;
 
-        let new_value: u16 = (lower << 8) + upper;
+        let new_value: u16 = (lower << 8) + (upper >> 8);
         return new_value;
     }
 
@@ -1595,6 +1596,7 @@ impl Cpu {
         if is_cast {
             let target = register_val as u8;
             let swaped_val = self.swap_8bit(target);
+            self.A = swaped_val;
             let z: bool = swaped_val == 0;
             let (n, h, c) = (false, false, false);
             self.set_flag(z, n, h, c);
@@ -1602,6 +1604,7 @@ impl Cpu {
         else {
             let target = register_val;
             let swaped_val = self.swap_16bit(target);
+            self.set_hl(swaped_val);
             let z: bool = swaped_val == 0;
             let (n, h, c) = (false, false, false);
             self.set_flag(z, n, h, c);
@@ -3320,6 +3323,7 @@ impl Cpu {
         let input: u8 = self.read_next_8()?;
         let address = (input as u16) + (0xFF00);
         let data = self.bus.read(address)?;
+        
         self.A = data;
 
         Ok(12)
