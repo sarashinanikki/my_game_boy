@@ -581,23 +581,43 @@ impl Ppu {
     }
 
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
-        self.vram[address as usize] = data;
-        Ok(())
+        match self.mode {
+            Mode::Drawing => Ok(()),
+            _ => {
+                self.vram[address as usize] = data;
+                Ok(())
+            }
+        }
     }
 
     pub fn read(&self, address: u16) -> Result<u8> {
-        let data = self.vram[address as usize];
-        Ok(data)
+        match self.mode {
+            Mode::Drawing => Ok(0xFF),
+            _ => {
+                let data = self.vram[address as usize];
+                Ok(data)
+            },
+        }
     }
 
     pub fn write_OAM(&mut self, address: u16, data: u8) -> Result<()> {
-        self.oam[address as usize / 4].set(address, data);
-        Ok(())
+        match self.mode {
+            Mode::OamScan | Mode::Drawing => Ok(()),
+            _ => {
+                self.oam[address as usize / 4].set(address, data);
+                Ok(())
+            }
+        }
     }
 
     pub fn read_OAM(&self,address: u16) -> Result<u8> {
-        let data = self.oam[address as usize / 4].get(address);
-        Ok(data)
+        match self.mode {
+            Mode::OamScan | Mode::Drawing => Ok(0xFF),
+            _ => {
+                let data = self.oam[address as usize / 4].get(address);
+                Ok(data)
+            }
+        }
     }
 
     pub fn lcd_control_write(&mut self, data: u8) -> Result<()> {
