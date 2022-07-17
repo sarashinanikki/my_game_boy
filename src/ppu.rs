@@ -137,8 +137,6 @@ impl Ppu {
                     self.assign_bg_palette();
                     self.assign_sprite_palette();
                 }
-                // 後で実装
-                
             },
             Mode::Drawing => {
                 if self.current_cycle >= 252 {
@@ -149,14 +147,18 @@ impl Ppu {
             },
             Mode::HBlank => {
                 if self.current_cycle >= 456 {
-                    self.mode = Mode::OamScan;
-                    self.handle_mode2_interrupt();
                     self.current_cycle = 0;
                     self.ly += 1;
-                    if self.ly == 144 {
+                    if self.ly < 144 {
+                        self.mode = Mode::OamScan;
+                        self.handle_mode2_interrupt();
+                        self.handle_lyc_ly_interrupt();
+                    }
+                    else if self.ly == 144 {
                         self.mode = Mode::VBlank;
                         self.int_vblank = true;
                         self.handle_mode1_interrupt();
+                        self.handle_lyc_ly_interrupt();
                     }
                 }
             },
@@ -702,15 +704,15 @@ impl Ppu {
     }
 
     fn handle_lyc_ly_interrupt(&mut self) {
-        let is_coincident = self.ly == self.lyc;
-        if is_coincident {
+        let is_equal = self.ly == self.lyc;
+        if is_equal {
             self.lcd_stat |= 1 << 2;
         }
         else {
             self.lcd_stat &= !(1 << 2);
         }
 
-        if (self.lcd_stat & (1 << 6)) == (1 << 6) && is_coincident {
+        if (self.lcd_stat & (1 << 6)) == (1 << 6) && is_equal {
             self.int_lcd_stat = true;
         }
     }
