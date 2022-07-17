@@ -137,7 +137,9 @@ impl Cpu {
     }
 
     fn handle_interrupt(&mut self, interrupt_idx: u8) -> u8 {
-        self.bus.int_flag &= !(1 << interrupt_idx);
+        if self.ime {
+            self.bus.int_flag &= !(1 << interrupt_idx);
+        }
         self.halt = false;
 
         let address = match interrupt_idx {
@@ -553,6 +555,7 @@ impl Cpu {
                     0x72 => self.ld_72(),
                     0x71 => self.ld_71(),
                     0x70 => self.ld_70(),
+                    0x6F => self.ld_6F(),
                     0x6E => self.ld_6E(),
                     0x6D => self.ld_6D(),
                     0x6C => self.ld_6C(),
@@ -2568,6 +2571,24 @@ impl Cpu {
         Ok(4)
     }
 
+    fn base_sbc(&mut self, left: u8, carry_val: u8, data: u8, is_hl: bool) -> Result<u8> {
+        let val = left.wrapping_sub(carry_val).wrapping_sub(data);
+        self.A = val;
+
+        let z: bool = self.A == 0;
+        let n: bool = true;
+        let (h, c) = self.is_carry_negative(left, data + carry_val);
+
+        self.set_flag(z, n, h, c);
+
+        if is_hl {
+            Ok(8)
+        }
+        else {
+            Ok(4)
+        }
+    }
+
     #[allow(dead_code)]
     fn sbc_9E(&mut self) -> Result<u8> {
         let left = self.A;
@@ -2576,15 +2597,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(8)
+        self.base_sbc(left, carry_val, data, true)
     }
 
     #[allow(dead_code)]
@@ -2594,15 +2607,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(4)
+        self.base_sbc(left, carry_val, data, false)
     }
 
     #[allow(dead_code)]
@@ -2612,15 +2617,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(4)
+        self.base_sbc(left, carry_val, data, false)
     }
 
     #[allow(dead_code)]
@@ -2630,15 +2627,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(4)
+        self.base_sbc(left, carry_val, data, false)
     }
 
     #[allow(dead_code)]
@@ -2648,15 +2637,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(4)
+        self.base_sbc(left, carry_val, data, false)
     }
 
     #[allow(dead_code)]
@@ -2666,15 +2647,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(4)
+        self.base_sbc(left, carry_val, data, false)
     }
 
     #[allow(dead_code)]
@@ -2684,15 +2657,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(4)
+        self.base_sbc(left, carry_val, data, false)
     }
 
     #[allow(dead_code)]
@@ -2702,15 +2667,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(carry_val).wrapping_sub(data);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data + carry_val);
-
-        self.set_flag(z, n, h, c);
-        Ok(4)
+        self.base_sbc(left, carry_val, data, false)
     }
 
     #[allow(dead_code)]
