@@ -1,12 +1,13 @@
 use anyhow::{Result, bail};
 
-use crate::{mbc::Mbc, ppu::Ppu};
+use crate::{mbc::Mbc, ppu::Ppu, joypad::{Joypad,Button}};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
     pub hram: [u8; 0x127],
     pub ppu: Ppu,
     pub mbc: Box<dyn Mbc>,
+    pub joypad: Joypad,
     // interrupt enable
     pub ie_flag: u8,
     // interrupt flag
@@ -20,6 +21,7 @@ impl Bus {
             hram: [0; 0x127],
             ppu,
             mbc,
+            joypad: Default::default(),
             ie_flag: Default::default(),
             int_flag: Default::default()
         }
@@ -31,11 +33,14 @@ impl Bus {
             0x8000..=0x9FFF => self.ppu.read(address-0x8000),
             0xA000..=0xBFFF => self.mbc.read_ram(address-0xA000),
             0xC000..=0xDFFF => Ok(self.ram[(address-0xC000) as usize]),
-            // 0xE000..=0xFDFF => ECHO RAM,
+            0xE000..=0xFDFF => Ok(self.ram[(address-0xE000) as usize]),
             0xFE00..=0xFE9F => self.ppu.read_OAM(address-0xFE00),
             0xFEA0..=0xFEFF => Ok(0),
+            0xFF00 => Ok(self.joypad.read()),
+            // 0xFF01..=0xFF7F => IO,
             0xFF26 => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
+            0xFF41 => self.ppu.read_lcd_stat(),
             0xFF42 => self.ppu.scy_read(),
             0xFF43 => self.ppu.scx_read(),
             0xFF44 => self.ppu.ly_read(),
@@ -44,7 +49,6 @@ impl Bus {
             0xFF48..=0xFF49 => self.ppu.read_obp(address),
             0xFF4A => self.ppu.wy_read(),
             0xFF4B => self.ppu.wx_read(),
-            // 0xFF00..=0xFF7F => IO,
             0xFF0F => Ok(self.int_flag),
             0xFF80..=0xFFFE => Ok(self.hram[(address-0xFF80) as usize]),
             0xFFFF => Ok(self.ie_flag),
@@ -69,16 +73,24 @@ impl Bus {
                 self.ram[(address-0xC000) as usize] = data;
                 Ok(())
             },
-            // 0xE000..=0xFDFF => ECHO RAM,
+            0xE000..=0xFDFF => {
+                self.ram[(address-0xE000) as usize] = data;
+                Ok(())
+            },
             0xFE00..=0xFE9F => self.ppu.write_OAM(address-0xFE00, data),
             0xFEA0..=0xFEFF => Ok(()),
-            // 0xFF00..=0xFF7F => IO,
+            0xFF00 => {
+                self.joypad.write(data);
+                Ok(())
+            },
+            // 0xFF01..=0xFF7F => IO,
             0xFF0F => {
                 self.int_flag = data;
                 Ok(())
-            }
+            },
             0xFF26 => Ok(()),
             0xFF40 => self.ppu.lcd_control_write(data),
+            0xFF41 => self.ppu.write_lcd_stat(data),
             0xFF42 => self.ppu.scy_write(data),
             0xFF43 => self.ppu.scx_write(data),
             0xFF44 => self.ppu.ly_write(data),

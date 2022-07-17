@@ -70,6 +70,7 @@ pub struct Ppu {
     vram: [u8; 0x8192],
     oam: [OAM; 40],
     lcd_control: u8,
+    lcd_stat: u8,
     scy: u8,
     scx: u8,
     ly: u8,
@@ -97,6 +98,7 @@ impl Ppu {
             vram: [0; 0x8192],
             oam: [OAM::default(); 40],
             lcd_control: 0x80,
+            lcd_stat: 0x80,
             scy: Default::default(),
             scx: Default::default(),
             ly: Default::default(),
@@ -126,10 +128,6 @@ impl Ppu {
         }
 
         self.current_cycle += cycle as usize;
-        if self.ly == 144 {
-            self.mode = Mode::VBlank;
-            self.int_vblank = true;
-        }
 
         match self.mode {
             Mode::OamScan => {
@@ -145,14 +143,21 @@ impl Ppu {
             Mode::Drawing => {
                 if self.current_cycle >= 252 {
                     self.mode = Mode::HBlank;
+                    self.handle_mode0_interrupt();
                     self.fetch();
                 }
             },
             Mode::HBlank => {
                 if self.current_cycle >= 456 {
                     self.mode = Mode::OamScan;
+                    self.handle_mode2_interrupt();
                     self.current_cycle = 0;
                     self.ly += 1;
+                    if self.ly == 144 {
+                        self.mode = Mode::VBlank;
+                        self.int_vblank = true;
+                        self.handle_mode1_interrupt();
+                    }
                 }
             },
             Mode::VBlank => {
@@ -163,6 +168,7 @@ impl Ppu {
                     if self.ly == 0 {
                         self.current_cycle = 0;
                         self.mode = Mode::OamScan;
+                        self.handle_mode2_interrupt();
                     }
                 }
             }
@@ -198,6 +204,8 @@ impl Ppu {
 
     fn fetch(&mut self) {
         let scan_line = self.ly;
+        self.bg_fifo.clear();
+        self.sprite_fifo.clear();
         for x_position_counter in 0..160 {
             // check is window rendered
             if self.is_window_rendering(x_position_counter) {
@@ -215,7 +223,7 @@ impl Ppu {
                 self.oam_fetch(x_position_counter);
             }
 
-            if x_position_counter == 0 && self.is_window_rendering(x_position_counter) {
+            if x_position_counter == 0 && !self.is_window_rendering(x_position_counter) {
                 let discard = self.scx % 8;
                 for _ in 0..discard {
                     self.bg_fifo.pop_front();
@@ -683,4 +691,49 @@ impl Ppu {
     fn read_lcd_bit(&self, bit: u8) -> bool {
         return &self.lcd_control & (1 << bit) == (1 << bit);
     }
+
+    pub fn read_lcd_stat(&self) -> Result<u8> {
+        Ok(self.lcd_stat)
+    }
+
+    pub fn write_lcd_stat(&mut self, data: u8) -> Result<()> {
+        self.lcd_stat = data & 0xFC;
+        Ok(())
+    }
+
+    fn handle_lyc_ly_interrupt(&mut self) {
+        let is_coincident = self.ly == self.lyc;
+        if is_coincident {
+            self.lcd_stat |= 1 << 2;
+        }
+        else {
+            self.lcd_stat &= !(1 << 2);
+        }
+
+        if (self.lcd_stat & (1 << 6)) == (1 << 6) && is_coincident {
+            self.int_lcd_stat = true;
+        }
+    }
+
+    fn handle_mode2_interrupt(&mut self) {
+        self.lcd_stat = (self.lcd_stat & 0xFC) + 2;
+        if (self.lcd_stat & (1 << 5)) == (1 << 5) {
+            self.int_lcd_stat = true;
+        }
+    }
+
+    fn handle_mode1_interrupt(&mut self) {
+        self.lcd_stat = (self.lcd_stat & 0xFC) + 1;
+        if (self.lcd_stat & (1 << 4)) == (1 << 4) {
+            self.int_lcd_stat = true;
+        }
+    }
+
+    fn handle_mode0_interrupt(&mut self) {
+        self.lcd_stat = self.lcd_stat & 0xFC;
+        if (self.lcd_stat & (1 << 3)) == (1 << 3) {
+            self.int_lcd_stat = true;
+        }
+    }
+
 }
