@@ -33,11 +33,11 @@ impl Bus {
             0x8000..=0x9FFF => self.ppu.read(address-0x8000),
             0xA000..=0xBFFF => self.mbc.read_ram(address-0xA000),
             0xC000..=0xDFFF => Ok(self.ram[(address-0xC000) as usize]),
-            // 0xE000..=0xFDFF => ECHO RAM,
+            0xE000..=0xFDFF => Ok(self.ram[(address-0xE000) as usize]),
             0xFE00..=0xFE9F => self.ppu.read_OAM(address-0xFE00),
             0xFEA0..=0xFEFF => Ok(0),
             0xFF00 => Ok(self.joypad.read()),
-            // 0xFF00..=0xFF7F => IO,
+            // 0xFF01..=0xFF7F => IO,
             0xFF26 => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF41 => self.ppu.read_lcd_stat(),
@@ -73,7 +73,10 @@ impl Bus {
                 self.ram[(address-0xC000) as usize] = data;
                 Ok(())
             },
-            // 0xE000..=0xFDFF => ECHO RAM,
+            0xE000..=0xFDFF => {
+                self.ram[(address-0xE000) as usize] = data;
+                Ok(())
+            },
             0xFE00..=0xFE9F => self.ppu.write_OAM(address-0xFE00, data),
             0xFEA0..=0xFEFF => Ok(()),
             0xFF00 => {
