@@ -96,6 +96,9 @@ impl Cpu {
             op_cycle += self.check_interrupt();
             self.bus.ppu.tick(op_cycle);
 
+            // Timerをサイクル分動かす
+            self.bus.timer.tick(op_cycle);
+
             // 現在のサイクル数を更新
             current_cycle += op_cycle as usize;
         }
@@ -114,6 +117,11 @@ impl Cpu {
             self.bus.int_flag |= 1 << 1;
         }
 
+        if self.bus.timer.int_timer_flag {
+            self.bus.timer.int_timer_flag = false;
+            self.bus.int_flag |= 1 << 2;
+        }
+
         if self.bus.joypad.int_flag {
             self.bus.joypad.int_flag = false;
             self.bus.int_flag |= 1 << 4;
@@ -124,10 +132,9 @@ impl Cpu {
         let interrupt_flags = self.bus.int_flag & self.bus.ie_flag;
 
         if interrupt_flags != 0 {
-            let mut interrupt_idx = 0;
             for bit in 0..5_u8 {
-                if interrupt_flags & (1 << bit) == (1 << bit) {
-                    interrupt_idx = bit;
+                if (interrupt_flags & (1 << bit)) == (1 << bit) {
+                    let interrupt_idx = bit;
                     return self.handle_interrupt(interrupt_idx)
                 }
             }
@@ -147,12 +154,15 @@ impl Cpu {
             1 => 0x48,
             2 => 0x50,
             3 => 0x58,
-            _ => 0x60
+            4 | _ => {
+                self.bus.timer.is_stop = false;
+                0x60
+            }
         };
 
         if self.ime {
             self.ime = false;
-            self.base_call(address).unwrap();
+            self.int_call(address).unwrap();
         }
 
         return 12;
@@ -969,6 +979,19 @@ impl Cpu {
         Ok(())
     }
 
+    fn int_call(&mut self, address: u16) -> Result<()> {
+        // 2byteのデータを積むので2回デクリメント
+        self.decrement_sp();
+        self.decrement_sp();
+
+        let stack_address = self.SP;
+        self.bus.write_16(stack_address, self.PC)?;
+        self.PC = address;
+        self.jmp_flag = true;
+
+        Ok(())
+    }
+
     #[allow(dead_code)]
     fn jr_c(&mut self) -> Result<u8> {
         let address = self.read_next_8()?;
@@ -1511,6 +1534,7 @@ impl Cpu {
     #[allow(dead_code)]
     fn stop(&mut self) -> Result<u8> {
         self.halt = true;
+        self.bus.timer.is_stop = true;
         // TODO: LCDディスプレイも止める実装をする
         Ok(4)
     }
