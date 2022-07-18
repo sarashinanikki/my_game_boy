@@ -19,6 +19,7 @@ mod bus;
 mod cpu;
 mod ppu;
 mod joypad;
+mod timer;
 
 fn main() {
     dotenv().ok();

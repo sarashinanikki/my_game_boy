@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 
-use crate::{mbc::Mbc, ppu::Ppu, joypad::{Joypad,Button}};
+use crate::{mbc::Mbc, ppu::Ppu, joypad::Joypad, timer::Timer};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
@@ -8,6 +8,7 @@ pub struct Bus {
     pub ppu: Ppu,
     pub mbc: Box<dyn Mbc>,
     pub dma: u8,
+    pub timer: Timer,
     pub joypad: Joypad,
     // interrupt enable
     pub ie_flag: u8,
@@ -22,6 +23,7 @@ impl Bus {
             hram: [0; 0x127],
             ppu,
             mbc,
+            timer: Default::default(),
             dma: Default::default(),
             joypad: Default::default(),
             ie_flag: Default::default(),
@@ -40,6 +42,10 @@ impl Bus {
             0xFEA0..=0xFEFF => Ok(0),
             0xFF00 => Ok(self.joypad.read()),
             // 0xFF01..=0xFF7F => IO,
+            0xFF04 => Ok(self.timer.read_div()),
+            0xFF05 => Ok(self.timer.read_tima()),
+            0xFF06 => Ok(self.timer.read_tma()),
+            0xFF07 => Ok(self.timer.read_tac()),
             0xFF26 => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF41 => self.ppu.read_lcd_stat(),
@@ -87,6 +93,22 @@ impl Bus {
                 Ok(())
             },
             // 0xFF01..=0xFF7F => IO,
+            0xFF04 => {
+                self.timer.write_div(data);
+                Ok(())
+            },
+            0xFF05 => {
+                self.timer.write_tima(data);
+                Ok(())
+            },
+            0xFF06 => {
+                self.timer.write_tma(data);
+                Ok(())
+            },
+            0xFF07 => {
+                self.timer.write_tac(data);
+                Ok(())
+            },
             0xFF0F => {
                 self.int_flag = data;
                 Ok(())
