@@ -7,6 +7,7 @@ pub struct Bus {
     pub hram: [u8; 0x127],
     pub ppu: Ppu,
     pub mbc: Box<dyn Mbc>,
+    pub dma: u8,
     pub joypad: Joypad,
     // interrupt enable
     pub ie_flag: u8,
@@ -21,6 +22,7 @@ impl Bus {
             hram: [0; 0x127],
             ppu,
             mbc,
+            dma: Default::default(),
             joypad: Default::default(),
             ie_flag: Default::default(),
             int_flag: Default::default()
@@ -45,6 +47,7 @@ impl Bus {
             0xFF43 => self.ppu.scx_read(),
             0xFF44 => self.ppu.ly_read(),
             0xFF45 => self.ppu.lyc_read(),
+            0xFF46 => Ok(self.dma),
             0xFF47 => self.ppu.bgp_read(),
             0xFF48..=0xFF49 => self.ppu.read_obp(address),
             0xFF4A => self.ppu.wy_read(),
@@ -77,7 +80,7 @@ impl Bus {
                 self.ram[(address-0xE000) as usize] = data;
                 Ok(())
             },
-            0xFE00..=0xFE9F => self.ppu.write_OAM(address-0xFE00, data),
+            0xFE00..=0xFE9F => self.ppu.write_OAM(address-0xFE00, data, false),
             0xFEA0..=0xFEFF => Ok(()),
             0xFF00 => {
                 self.joypad.write(data);
@@ -95,6 +98,7 @@ impl Bus {
             0xFF43 => self.ppu.scx_write(data),
             0xFF44 => self.ppu.ly_write(data),
             0xFF45 => self.ppu.lyc_write(data),
+            0xFF46 => self.excute_dma(data),
             0xFF47 => self.ppu.bgp_write(data),
             0xFF48..=0xFF49 => self.ppu.write_obp(address, data),
             0xFF4A => self.ppu.wy_write(data),
@@ -117,6 +121,19 @@ impl Bus {
 
         self.write(address, low)?;
         self.write(address+1, high)?;
+
+        Ok(())
+    }
+
+    fn excute_dma(&mut self, data: u8) -> Result<()> {
+        self.dma = data;
+        let source: u16 = (data as u16) << 8;
+        for i in 0..0xA0_u16 {
+            let src_address = source + i;
+            let data = self.read(src_address)?;
+            let dest_address = i;
+            self.ppu.write_OAM(dest_address, data, true)?;
+        }
 
         Ok(())
     }

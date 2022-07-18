@@ -137,8 +137,6 @@ impl Ppu {
                     self.assign_bg_palette();
                     self.assign_sprite_palette();
                 }
-                // 後で実装
-                
             },
             Mode::Drawing => {
                 if self.current_cycle >= 252 {
@@ -149,14 +147,18 @@ impl Ppu {
             },
             Mode::HBlank => {
                 if self.current_cycle >= 456 {
-                    self.mode = Mode::OamScan;
-                    self.handle_mode2_interrupt();
                     self.current_cycle = 0;
                     self.ly += 1;
-                    if self.ly == 144 {
+                    if self.ly < 144 {
+                        self.mode = Mode::OamScan;
+                        self.handle_mode2_interrupt();
+                        self.handle_lyc_ly_interrupt();
+                    }
+                    else if self.ly == 144 {
                         self.mode = Mode::VBlank;
                         self.int_vblank = true;
                         self.handle_mode1_interrupt();
+                        self.handle_lyc_ly_interrupt();
                     }
                 }
             },
@@ -283,7 +285,7 @@ impl Ppu {
     fn assign_sprite_palette(&mut self) {
         for i in 0..2 {
             for j in 0..4 {
-                let bit = i * 2;
+                let bit = j * 2;
                 let lower_bit = if (self.obp[i] & (1 << bit)) == (1 << bit) { 1_u8 } else { 0_u8 };
                 let higher_bit = if (self.obp[i] & 1 << (bit+1)) == (1 << (bit+1)) { 2_u8 } else { 0_u8 };
                 let color_val = higher_bit + lower_bit;
@@ -301,10 +303,10 @@ impl Ppu {
     }
 
     fn apply_bg_pixel_color(&self, color_idx: u8) -> [u8; 4] {
-        let black: [u8; 4] = [0x0f, 0x38, 0x0f, 0xff];
-        let dark_gray: [u8; 4] = [0x30, 0x62, 0x30, 0xff];
-        let light_gray: [u8; 4] = [0x8b, 0xac, 0x0f, 0xff];
-        let white: [u8; 4] = [0x9b, 0xbc, 0x7f, 0xff];
+        let black: [u8; 4] = [0x12, 0x15, 0x10, 0xff];
+        let dark_gray: [u8; 4] = [0x48, 0x56, 0x43, 0xff];
+        let light_gray: [u8; 4] = [0xb6, 0xd7, 0xa8, 0xff];
+        let white: [u8; 4] = [0xe1, 0xef, 0xdc, 0xff];
 
         let color = match self.bg_color_palette.0[color_idx as usize] {
             Color::White => white,
@@ -317,10 +319,10 @@ impl Ppu {
     }
 
     fn apply_sprite_pixel_color(&self, color_idx: u8, palette: u8) -> [u8; 4] {
-        let black: [u8; 4] = [0x0f, 0x38, 0x0f, 0xff];
-        let dark_gray: [u8; 4] = [0x30, 0x62, 0x30, 0xff];
-        let light_gray: [u8; 4] = [0x8b, 0xac, 0x0f, 0xff];
-        let white: [u8; 4] = [0x9b, 0xbc, 0x7f, 0xff];
+        let black: [u8; 4] = [0x12, 0x15, 0x10, 0xff];
+        let dark_gray: [u8; 4] = [0x48, 0x56, 0x43, 0xff];
+        let light_gray: [u8; 4] = [0xb6, 0xd7, 0xa8, 0xff];
+        let white: [u8; 4] = [0xe1, 0xef, 0xdc, 0xff];
 
         let color = match self.obp_color_palette[palette as usize].0[color_idx as usize] {
             Color::White => white,
@@ -361,7 +363,7 @@ impl Ppu {
 
     fn oam_fetch(&mut self, x_coordinate: u8) {
         let target_sprite = self.sprite_buffer.iter().find(|el| {
-            el.0.x_position <= x_coordinate + 8 && x_coordinate <= el.0.x_position
+            el.0.x_position == x_coordinate + 8
         });
 
         if let Some(target) = target_sprite {
@@ -397,10 +399,10 @@ impl Ppu {
 
                 for i in 0..8_u8 {
                     let bit = if !x_flip { 7-i } else { i };
-                    let top = if higher_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
+                    let top = if higher_tile_data & (1 << bit) == (1 << bit) {2_u8} else {0_u8};
                     let bottom = if lower_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
 
-                    let pixel_color = top*2 + bottom;
+                    let pixel_color = top + bottom;
                     let pixel_data = PixelData {
                         color: pixel_color,
                         background_priority: priority,
@@ -441,11 +443,11 @@ impl Ppu {
                 let higher_tile_data = self.vram[tile_address + 1];
 
                 for i in 0..8_u8 {
-                    let bit = if x_flip { 7-i } else { i };
-                    let top = if higher_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
+                    let bit = if !x_flip { 7-i } else { i };
+                    let top = if higher_tile_data & (1 << bit) == (1 << bit) {2_u8} else {0_u8};
                     let bottom = if lower_tile_data & (1 << bit) == (1 << bit) {1_u8} else {0_u8};
 
-                    let pixel_color = top*2 + bottom;
+                    let pixel_color = top + bottom;
                     let pixel_data = PixelData {
                         color: pixel_color,
                         background_priority: priority,
@@ -579,23 +581,48 @@ impl Ppu {
     }
 
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
-        self.vram[address as usize] = data;
-        Ok(())
+        match self.mode {
+            Mode::Drawing => Ok(()),
+            _ => {
+                self.vram[address as usize] = data;
+                Ok(())
+            }
+        }
     }
 
     pub fn read(&self, address: u16) -> Result<u8> {
-        let data = self.vram[address as usize];
-        Ok(data)
+        match self.mode {
+            Mode::Drawing => Ok(0xFF),
+            _ => {
+                let data = self.vram[address as usize];
+                Ok(data)
+            },
+        }
     }
 
-    pub fn write_OAM(&mut self, address: u16, data: u8) -> Result<()> {
-        self.oam[address as usize / 4].set(address, data);
-        Ok(())
+    pub fn write_OAM(&mut self, address: u16, data: u8, dma: bool) -> Result<()> {
+        match self.mode {
+            Mode::OamScan | Mode::Drawing => {
+                if dma {
+                    self.oam[address as usize / 4].set(address, data);
+                }
+                Ok(())
+            },
+            _ => {
+                self.oam[address as usize / 4].set(address, data);
+                Ok(())
+            }
+        }
     }
 
     pub fn read_OAM(&self,address: u16) -> Result<u8> {
-        let data = self.oam[address as usize / 4].get(address);
-        Ok(data)
+        match self.mode {
+            Mode::OamScan | Mode::Drawing => Ok(0xFF),
+            _ => {
+                let data = self.oam[address as usize / 4].get(address);
+                Ok(data)
+            }
+        }
     }
 
     pub fn lcd_control_write(&mut self, data: u8) -> Result<()> {
@@ -702,15 +729,15 @@ impl Ppu {
     }
 
     fn handle_lyc_ly_interrupt(&mut self) {
-        let is_coincident = self.ly == self.lyc;
-        if is_coincident {
+        let is_equal = self.ly == self.lyc;
+        if is_equal {
             self.lcd_stat |= 1 << 2;
         }
         else {
             self.lcd_stat &= !(1 << 2);
         }
 
-        if (self.lcd_stat & (1 << 6)) == (1 << 6) && is_coincident {
+        if (self.lcd_stat & (1 << 6)) == (1 << 6) && is_equal {
             self.int_lcd_stat = true;
         }
     }
