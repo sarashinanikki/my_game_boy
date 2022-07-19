@@ -28,7 +28,7 @@ impl Timer {
         let counter_bit = (self.current_cycle & self.clock_frequency_bit) == self.clock_frequency_bit;
         let and_result = counter_bit & self.int_timer_enable;
 
-        if !self.prev_and_result && and_result {
+        if self.prev_and_result && !and_result {
             let (new_tima, is_overflow) = self.tima.overflowing_add(1);
             self.tima = new_tima;
             self.is_overflowing = is_overflow;
