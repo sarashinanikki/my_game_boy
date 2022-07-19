@@ -488,6 +488,7 @@ impl Cpu {
                     0xA1 => self.and_A1(),
                     0xA0 => self.and_A0(),
                     0xA7 => self.and_A7(),
+                    0xDE => self.sbc_DE(),
                     0x9E => self.sbc_9E(),
                     0x9D => self.sbc_9D(),
                     0x9C => self.sbc_9C(),
@@ -628,7 +629,6 @@ impl Cpu {
             },
             Opcode { cb_prefix: true, code: res } => {
                 match res {
-                    06 => Ok(0),
                     0x00..=0x07 => self.rlc_CB(res),
                     0x08..=0x0F => self.rrc_CB(res),
                     0x10..=0x17 => self.rl_CB(res),
@@ -646,17 +646,17 @@ impl Cpu {
     }
 
     // (h, c)を返す。8bitの足し算時に使う
-    fn is_carry_positive(&mut self, left: u16, right: u16) -> (bool, bool) {
-        let h: bool = ((left & 0x0F) + (right & 0x0F) & 0x10) == 0x10;
-        let c: bool = ((left & 0xFF) as u16 + (right & 0xFF) as u16 & 0x100) == 0x100;
+    fn is_carry_positive(&mut self, left: u8, right: u8) -> (bool, bool) {
+        let h: bool = ((left & 0x0F) + (right & 0x0F)) > 0x0F;
+        let (_, c) = (left as u8).overflowing_add(right as u8);
 
         return (h, c)
     }
 
     // (h, c)を返す。8bitの引き算時に使う
-    fn is_carry_negative(&mut self, left: u8, right: u16) -> (bool, bool) {
-        let h: bool = (left as u16 & 0x0F) < (right & 0x0F);
-        let c: bool = (left as u16 & 0xFF) < (right & 0xFF);
+    fn is_carry_negative(&mut self, left: u8, right: u8) -> (bool, bool) {
+        let h: bool = (left & 0x0F) < (right & 0x0F);
+        let (_, c) = left.overflowing_sub(right);
 
         return (h, c);
     }
@@ -664,7 +664,7 @@ impl Cpu {
     // (h, c)を返す。16bitの足し算時に使う
     fn is_carry_positive_16(&mut self, left: u16, right: u16) -> (bool, bool) {
         let h: bool = ((left & 0xFFF) + (right & 0xFFF) & 0x1000) == 0x1000;
-        let c: bool = ((left & 0xFFFF) as u32 + (right & 0xFFFF) as u32 & 0x10000) == 0x10000;
+        let (_, c) = left.overflowing_add(right);
 
         return (h, c)
     }
@@ -672,7 +672,7 @@ impl Cpu {
     // (h, c)を返す。16bitの引き算時に使う
     fn is_carry_negative_16(&mut self, left: u16, right: u16) -> (bool, bool) {
         let h: bool = (left & 0xFFF) < (right & 0xFFF);
-        let c: bool = (left & 0xFFFF) < (right & 0xFFFF);
+        let (_, c) = left.overflowing_sub(right);
 
         return (h, c);
     }
@@ -719,14 +719,6 @@ impl Cpu {
         let lower: u8 = target & 0x0F;
 
         let new_value: u8 = (lower << 4) + (upper >> 4);
-        return new_value;
-    }
-
-    fn swap_16bit(&self, target: u16) -> u16 {
-        let upper: u16 = target & 0xFF00;
-        let lower: u16 = target & 0x00FF;
-
-        let new_value: u16 = (lower << 8) + (upper >> 8);
         return new_value;
     }
 
@@ -1463,29 +1455,22 @@ impl Cpu {
     #[allow(dead_code)]
     fn rra(&mut self) -> Result<u8> {
         let c = self.get_carry_flag();
-        let c_new_flag = (self.A & (1 << 0)) == 1 << 0;
+        let c_new_flag = self.A & 0x01 > 0;
 
-        let mut old_val = self.A;
-        if c != c_new_flag {
-            old_val = self.A ^ (1 << 0);
-        }
-
-        let val = old_val.rotate_right(1);
+        let val = (self.A >> 1) | (c as u8) << 7;
         self.A = val;
 
-        let z = val == 0;
-        self.set_flag(z, false, false, c_new_flag);
+        self.set_flag(false, false, false, c_new_flag);
 
         Ok(4)
     }
 
     #[allow(dead_code)]
     fn rrca(&mut self) -> Result<u8> {
-        let c = (self.A & (1 << 0)) == 1 << 0;
+        let c = self.A & 0x01 > 0;
         let val = self.A.rotate_right(1);
         self.A = val;
-        let z = val == 0;
-        self.set_flag(z, false, false, c);
+        self.set_flag(false, false, false, c);
 
         Ok(4)
     }
@@ -1495,27 +1480,22 @@ impl Cpu {
         let c = self.get_carry_flag();
         let c_new_flag = (self.A & (1 << 7)) == 1 << 7;
 
-        let mut old_val = self.A;
-        if c != c_new_flag {
-            old_val = self.A ^ (1 << 7);
-        }
-
-        let val = old_val.rotate_left(1);
+        let val = (self.A << 1) | c as u8;
         self.A = val;
 
-        let z = val == 0;
-        self.set_flag(z, false, false, c_new_flag);
+        self.set_flag(false, false, false, c_new_flag);
 
         Ok(4)
     }
 
     #[allow(dead_code)]
     fn rlca(&mut self) -> Result<u8> {
-        let c = (self.A & (1 << 7)) == 1 << 7;
-        let val = self.A.rotate_left(1);
+        let target = self.A;
+        let c = (target >> 7) & 1;
+        let val = target.rotate_left(1);
+        
         self.A = val;
-        let z = val == 0;
-        self.set_flag(z, false, false, c);
+        self.set_flag(false, false, false, c == 1);
 
         Ok(4)
     }
@@ -1623,15 +1603,16 @@ impl Cpu {
         if is_cast {
             let target = register_val as u8;
             let swaped_val = self.swap_8bit(target);
-            self.A = swaped_val;
+            self.opcode_to_write_registers(opcode, swaped_val);
             let z: bool = swaped_val == 0;
             let (n, h, c) = (false, false, false);
             self.set_flag(z, n, h, c);
         }
         else {
-            let target = register_val;
-            let swaped_val = self.swap_16bit(target);
-            self.set_hl(swaped_val);
+            let address = register_val;
+            let target = self.bus.read(address)?;
+            let swaped_val = self.swap_8bit(target);
+            self.bus.write(address, swaped_val)?;
             let z: bool = swaped_val == 0;
             let (n, h, c) = (false, false, false);
             self.set_flag(z, n, h, c);
@@ -1699,7 +1680,8 @@ impl Cpu {
 
         let z: bool = false;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left, right as u16);
+        let h: bool = (left & 0x0F) + (right as u16 & 0x0F) > 0x0F;
+        let (_, c) = self.SP.overflowing_add(right as u16);
 
         self.set_flag(z, n, h, c);
         Ok(16)
@@ -1781,7 +1763,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1799,7 +1781,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1817,7 +1799,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1835,7 +1817,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1853,7 +1835,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1871,7 +1853,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1889,7 +1871,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1907,7 +1889,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = true;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_negative(left, right as u16);
+        let (h, _) = self.is_carry_negative(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1926,7 +1908,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1944,7 +1926,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1962,7 +1944,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -1980,7 +1962,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.E = val;
@@ -2000,7 +1982,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -2018,7 +2000,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -2036,7 +2018,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -2054,7 +2036,7 @@ impl Cpu {
         let z: bool = val == 0;
         let n: bool = false;
         // Cは影響を受けない
-        let (h, _) = self.is_carry_positive(left as u16, right as u16);
+        let (h, _) = self.is_carry_positive(left, right);
         let c = self.get_carry_flag();
 
         self.set_flag(z, n, h, c);
@@ -2069,7 +2051,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2084,7 +2066,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2098,7 +2080,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2112,7 +2094,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2126,7 +2108,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2140,7 +2122,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2154,7 +2136,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2168,7 +2150,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2182,7 +2164,7 @@ impl Cpu {
 
         let z: bool = val == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, right as u16);
+        let (h, c) = self.is_carry_negative(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2596,13 +2578,14 @@ impl Cpu {
         Ok(4)
     }
 
-    fn base_sbc(&mut self, left: u8, carry_val: u8, data: u8, is_hl: bool) -> Result<u8> {
-        let val = left.wrapping_sub(carry_val).wrapping_sub(data);
+    fn base_sbc(&mut self, left: u8, carry_val: u8, right: u8, is_hl: bool) -> Result<u8> {
+        let val = left.wrapping_sub(carry_val).wrapping_sub(right);
         self.A = val;
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16 + carry_val as u16);
+        let h: bool = (left & 0x0F) < (right & 0x0F) + carry_val;
+        let c: bool = (left as u16) < (right as u16) + (carry_val as u16);
 
         self.set_flag(z, n, h, c);
 
@@ -2614,7 +2597,15 @@ impl Cpu {
         }
     }
 
-    #[allow(dead_code)]
+    fn sbc_DE(&mut self) -> Result<u8> {
+        let left = self.A;
+        let data: u8 = self.read_next_8()?;
+        let cf: bool = self.get_carry_flag();
+        let carry_val: u8 = if cf { 1 } else { 0 };
+
+        self.base_sbc(left, carry_val, data, false)
+    }
+
     fn sbc_9E(&mut self) -> Result<u8> {
         let left = self.A;
         let address: u16 = self.get_hl();
@@ -2704,7 +2695,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2720,7 +2711,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -2735,7 +2726,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2750,7 +2741,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2765,7 +2756,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2780,7 +2771,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2795,7 +2786,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2810,7 +2801,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -2825,27 +2816,32 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = true;
-        let (h, c) = self.is_carry_negative(left, data as u16);
+        let (h, c) = self.is_carry_negative(left, data);
 
         self.set_flag(z, n, h, c);
         Ok(4)
     }
 
-    #[allow(dead_code)]
-    fn adc_CE(&mut self) -> Result<u8> {
-        let left = self.A;
-        let data: u8 = self.read_next_8()?;
-        let cf: bool = self.get_carry_flag();
-        let carry_val: u8 = if cf { 1 } else { 0 };
-
-        let val = left.wrapping_add(data).wrapping_add(carry_val);
+    fn base_adc(&mut self, left: u8, right: u8, carry_val: u8) {
+        let val = left.wrapping_add(right).wrapping_add(carry_val);
         self.A = val;
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, data as u16 + carry_val as u16);
+        let h: bool = (left & 0x0F) + (right & 0x0F) + carry_val > 0x0F;
+        let c: bool = (left as u16) + (right as u16) + (carry_val as u16) > 0xFF;
 
         self.set_flag(z, n, h, c);
+    }
+
+    #[allow(dead_code)]
+    fn adc_CE(&mut self) -> Result<u8> {
+        let left = self.A;
+        let right: u8 = self.read_next_8()?;
+        let cf: bool = self.get_carry_flag();
+        let carry_val: u8 = if cf { 1 } else { 0 };
+
+        self.base_adc(left, right, carry_val);
         Ok(8)
     }
 
@@ -2853,18 +2849,11 @@ impl Cpu {
     fn adc_8E(&mut self) -> Result<u8> {
         let left = self.A;
         let address: u16 = self.get_hl();
-        let data: u8 = self.bus.read(address)?;
+        let right: u8 = self.bus.read(address)?;
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(data).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, data as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(8)
     }
 
@@ -2875,14 +2864,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(right).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(4)
     }
 
@@ -2893,14 +2875,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(right).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(4)
     }
 
@@ -2911,14 +2886,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(right).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(4)
     }
 
@@ -2929,14 +2897,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(right).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(4)
     }
 
@@ -2947,14 +2908,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(right).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(4)
     }
 
@@ -2965,14 +2919,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(right).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(4)
     }
 
@@ -2983,14 +2930,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        let val = left.wrapping_add(right).wrapping_add(carry_val);
-        self.A = val;
-
-        let z: bool = self.A == 0;
-        let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16 + carry_val as u16);
-
-        self.set_flag(z, n, h, c);
+        self.base_adc(left, right, carry_val);
         Ok(4)
     }
 
@@ -3003,7 +2943,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -3019,7 +2959,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(8)
@@ -3034,7 +2974,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3049,7 +2989,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3064,7 +3004,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3079,7 +3019,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3094,7 +3034,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3109,7 +3049,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3125,7 +3065,7 @@ impl Cpu {
 
         let z: bool = self.A == 0;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(left as u16, right as u16);
+        let (h, c) = self.is_carry_positive(left, right);
 
         self.set_flag(z, n, h, c);
         Ok(4)
@@ -3252,7 +3192,8 @@ impl Cpu {
 
         let z: bool = false;
         let n: bool = false;
-        let (h, c) = self.is_carry_positive(self.SP, input as u16);
+        let h: bool = (self.SP & 0x0F) + (address as u16 & 0x0F) > 0x0F;
+        let (_, c) = self.SP.overflowing_add(address as u16);
 
         self.set_flag(z, n, h, c);
 
