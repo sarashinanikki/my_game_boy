@@ -2,7 +2,7 @@ use std::io;
 
 use anyhow::{bail, Result};
 
-use crate::{bus::Bus, ppu::Mode};
+use crate::{bus::Bus};
 pub struct Cpu {
     A: u8,
     B: u8,
@@ -3173,7 +3173,7 @@ impl Cpu {
     fn pop_F1(&mut self) -> Result<u8> {
         let address: u16 = self.SP;
         let data: u16 = self.bus.read_16(address)?;
-        self.set_af(data);
+        self.set_af(data & 0xFFF0);
         
         // 二回インクリメントする
         self.increment_sp();
