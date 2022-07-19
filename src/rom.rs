@@ -33,8 +33,8 @@ pub struct Rom {
     pub licensee_code: [u8; 2],
     pub sgb_flag: bool,
     pub cartridge_type: u8,
-    pub rom_size: usize,
-    pub ram_size: usize,
+    pub rom_size: u8,
+    pub ram_size: u8,
     pub destination_code: DestinationCode,
     pub old_licensee_code: u8,
     pub version: u8,
@@ -108,21 +108,17 @@ impl Rom {
             None => bail!("fail! There is unexpected EOF in cartridge type")
         };
 
-        // 資料を見ながらROM sizeを計算する
+        // ROM sizeを読み込む
         rom.rom_size = match reader.take(1).bytes().next() {
-            Some(Ok(res @ 0x00..=0x08)) => (1 << res) * 32 * 1024_usize,
-            Some(Ok(0x52)) => (11 * 1024 * 1024_usize) / 10_usize,
-            Some(Ok(0x53)) => (12 * 1024 * 1024_usize) / 10_usize,
-            Some(Ok(0x54)) => (15 * 1024 * 1024_usize) / 10_usize,
+            Some(Ok(res @ (0x00..=0x08 | 0x52..=0x54))) => res,
             Some(Ok(_unknown)) => bail!("fail! Unknown data in Rom size, actual data is {}", _unknown),
             Some(Err(_err)) => bail!("fail! a byte data of ROM size is broken"),
             None => bail!("fail! There is unexpected EOF in ROM size")
         };
 
-        // 資料を見ながらRAM sizeを計算する
+        // RAM sizeを読み込む
         rom.ram_size = match reader.take(1).bytes().next() {
-            Some(Ok(0 | 1)) => 0,
-            Some(Ok(res @ 2..=5)) => (1 << res) * 1024_usize,
+            Some(Ok(res @ 0x00..=0x05)) => res,
             Some(Ok(_unknown)) => bail!("fail! unknown data in RAM size"),
             Some(Err(_err)) => bail!("fail! a byte data of RAM size is broken"),
             None => bail!("fail! There is unexpected EOF in RAM size")
@@ -182,7 +178,16 @@ impl Rom {
         reader.seek(SeekFrom::Start(0x000))?;
         reader.read_to_end(&mut rom.data)?;
 
-        if rom.data.len() != rom.rom_size {
+        // 資料を見ながらROM sizeを計算する
+        let actual_rom_size = match rom.rom_size {
+            0x00..=0x08 => (1 << rom.rom_size) * 32 * 1024_usize,
+            0x52 => (11 * 1024 * 1024_usize) / 10_usize,
+            0x53 => (12 * 1024 * 1024_usize) / 10_usize,
+            0x54 => (15 * 1024 * 1024_usize) / 10_usize,
+            _ => bail!("fail! a byte data of ROM size is broken"),
+        };
+
+        if rom.data.len() != actual_rom_size {
             bail!("Actual rom size is different from rom size data which is in ROM");
         }
 

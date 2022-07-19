@@ -42,10 +42,7 @@ fn main() {
 
     let file_path = base_path + rom_name;
     let mut reader = BufReader::new(File::open(file_path).unwrap());
-    let rom = rom::Rom::new(&mut reader).unwrap();
-    let mbc = Box::new(mbc::NoMbc{mbc_type: 0, rom});
-    let ppu = ppu::Ppu::new();
-    let bus = bus::Bus::new(mbc, ppu);
+    let bus = bus::Bus::new(&mut reader);
     let mut cpu = cpu::Cpu::new(bus);
     
     event_loop.run(move |event, _, control_flow| {
