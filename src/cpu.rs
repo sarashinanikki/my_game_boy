@@ -90,11 +90,10 @@ impl Cpu {
                 }
             }
 
-            // 割り込みのフラグを立たせる
-            self.update_interrupt();
+            // 割り込みを実行する
+            op_cycle += self.interrupt();
 
             // PPUをサイクル分動かす
-            op_cycle += self.check_interrupt();
             self.bus.ppu.tick(op_cycle);
 
             // Timerをサイクル分動かす
@@ -142,6 +141,11 @@ impl Cpu {
         }
 
         return 0;
+    }
+
+    fn interrupt(&mut self) -> u8 {
+        self.update_interrupt();
+        return self.check_interrupt();
     }
 
     fn handle_interrupt(&mut self, interrupt_idx: u8) -> u8 {
@@ -877,17 +881,16 @@ impl Cpu {
         Ok(16)
     }
 
-    #[allow(dead_code)]
     fn rst(&mut self, opcode: &u8) -> Result<u8> {
         let address = match opcode {
-            0xC7 => 0,
-            0xCF => 8,
-            0xD7 => 10,
-            0xDF => 18,
-            0xE7 => 20,
-            0xEF => 28,
-            0xF7 => 30,
-            0xFF => 38,
+            0xC7 => 0x00,
+            0xCF => 0x08,
+            0xD7 => 0x10,
+            0xDF => 0x18,
+            0xE7 => 0x20,
+            0xEF => 0x28,
+            0xF7 => 0x30,
+            0xFF => 0x38,
             _ => bail!("invalid rst opcode!")
         };
         
@@ -899,67 +902,58 @@ impl Cpu {
     #[allow(dead_code)]
     fn call_c(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 6;
         let c = self.get_carry_flag();
         
         if c {
-            self.base_call(address)?;
-            cycle = 12;
+            return self.base_call(address);
         }
 
-        Ok(cycle)
+        Ok(12)
     }
 
     #[allow(dead_code)]
     fn call_nc(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 6;
         let c = self.get_carry_flag();
         
         if !c {
-            self.base_call(address)?;
-            cycle = 12;
+            return self.base_call(address);
         }
 
-        Ok(cycle)
+        Ok(12)
     }
 
     #[allow(dead_code)]
     fn call_z(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 6;
         let z = self.get_zero_flag();
         
         if z {
-            self.base_call(address)?;
-            cycle = 12;
+            return self.base_call(address);
         }
 
-        Ok(cycle)
+        Ok(12)
     }
 
     #[allow(dead_code)]
     fn call_nz(&mut self) -> Result<u8> {
         let address: u16 = self.read_next_16()?;
-        let mut cycle = 6;
         let z = self.get_zero_flag();
         
         if !z {
-            self.base_call(address)?;
-            cycle = 12;
+            return self.base_call(address);
         }
 
-        Ok(cycle)
+        Ok(12)
     }
 
     #[allow(dead_code)]
     fn call(&mut self) -> Result<u8> {
         let address = self.read_next_16()?;
-        self.base_call(address)?;
-        Ok(12)
+        return self.base_call(address);
     }
 
-    fn base_call(&mut self, address: u16) -> Result<()> {
+    fn base_call(&mut self, address: u16) -> Result<u8> {
         // 2byteのデータを積むので2回デクリメント
         self.decrement_sp();
         self.decrement_sp();
@@ -969,7 +963,7 @@ impl Cpu {
         self.PC = address;
         self.jmp_flag = true;
 
-        Ok(())
+        Ok(24)
     }
 
     fn int_call(&mut self, address: u16) -> Result<()> {
