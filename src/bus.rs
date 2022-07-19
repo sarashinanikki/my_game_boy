@@ -81,6 +81,7 @@ impl Bus {
             0xFF05 => Ok(self.timer.read_tima()),
             0xFF06 => Ok(self.timer.read_tma()),
             0xFF07 => Ok(self.timer.read_tac()),
+            0xFF0F => Ok(self.int_flag),
             0xFF10..=0xFF3F => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF41 => self.ppu.read_lcd_stat(),
@@ -93,7 +94,6 @@ impl Bus {
             0xFF48..=0xFF49 => self.ppu.read_obp(address),
             0xFF4A => self.ppu.wy_read(),
             0xFF4B => self.ppu.wx_read(),
-            0xFF0F => Ok(self.int_flag),
             0xFF80..=0xFFFE => Ok(self.hram[(address-0xFF80) as usize]),
             0xFFFF => Ok(self.ie_flag),
             _ => bail!("fail! invalid address")
