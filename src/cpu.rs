@@ -74,7 +74,7 @@ impl Cpu {
                 }
     
                 // 命令コードを実行
-                op_cycle += self.excute_op(&opcode)?;
+                op_cycle = self.excute_op(&opcode)?;
 
                 // ステップ実行が有効化されていた場合はステップ実行に
                 if self.step_flag {
@@ -90,14 +90,17 @@ impl Cpu {
                 }
             }
 
-            // 割り込みを実行する
-            op_cycle += self.interrupt();
-
             // PPUをサイクル分動かす
             self.bus.ppu.tick(op_cycle);
-
+            
             // Timerをサイクル分動かす
-            self.bus.timer.tick(op_cycle);
+            // 一つずつ動かさないとbit操作が壊れるため、for文で動かす
+            for _ in 0..op_cycle {
+                self.bus.timer.tick();
+            }
+
+            // 割り込みを実行する
+            op_cycle += self.interrupt();
 
             // 現在のサイクル数を更新
             current_cycle += op_cycle as usize;
@@ -143,11 +146,6 @@ impl Cpu {
         return 0;
     }
 
-    fn interrupt(&mut self) -> u8 {
-        self.update_interrupt();
-        return self.check_interrupt();
-    }
-
     fn handle_interrupt(&mut self, interrupt_idx: u8) -> u8 {
         if self.ime {
             self.bus.int_flag &= !(1 << interrupt_idx);
@@ -167,10 +165,15 @@ impl Cpu {
 
         if self.ime {
             self.ime = false;
-            self.int_call(address).unwrap();
+            return self.int_call(address).unwrap();
         }
 
-        return 12;
+        return 0;
+    }
+
+    fn interrupt(&mut self) -> u8 {
+        self.update_interrupt();
+        return self.check_interrupt();
     }
 
     pub fn render(&mut self, frame: &mut [u8]) {
@@ -966,7 +969,7 @@ impl Cpu {
         Ok(24)
     }
 
-    fn int_call(&mut self, address: u16) -> Result<()> {
+    fn int_call(&mut self, address: u16) -> Result<u8> {
         // 2byteのデータを積むので2回デクリメント
         self.decrement_sp();
         self.decrement_sp();
@@ -976,7 +979,7 @@ impl Cpu {
         self.PC = address;
         self.jmp_flag = true;
 
-        Ok(())
+        Ok(24)
     }
 
     #[allow(dead_code)]
