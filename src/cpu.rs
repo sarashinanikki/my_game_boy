@@ -74,7 +74,7 @@ impl Cpu {
                 }
     
                 // 命令コードを実行
-                op_cycle = self.excute_op(&opcode)?;
+                op_cycle += self.excute_op(&opcode)?;
 
                 // ステップ実行が有効化されていた場合はステップ実行に
                 if self.step_flag {
@@ -1680,9 +1680,10 @@ impl Cpu {
 
         let z: bool = false;
         let n: bool = false;
+         
         let h: bool = (left & 0x0F) + (right as u16 & 0x0F) > 0x0F;
-        let (_, c) = self.SP.overflowing_add(right as u16);
-
+        let c: bool = (left & 0xFF) + (right as u16 & 0xFF) > 0xFF;
+        
         self.set_flag(z, n, h, c);
         Ok(16)
     }
@@ -3192,8 +3193,8 @@ impl Cpu {
 
         let z: bool = false;
         let n: bool = false;
-        let h: bool = (self.SP & 0x0F) + (address as u16 & 0x0F) > 0x0F;
-        let (_, c) = self.SP.overflowing_add(address as u16);
+        let h: bool = (self.SP & 0x0F) + (input as u16 & 0x0F) > 0x0F;
+        let c: bool = (self.SP & 0xFF) + (input as u16 & 0xFF) > 0xFF;
 
         self.set_flag(z, n, h, c);
 
