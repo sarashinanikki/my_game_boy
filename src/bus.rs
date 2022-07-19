@@ -1,6 +1,8 @@
+use std::{io::BufReader, fs::File};
+
 use anyhow::{Result, bail};
 
-use crate::{mbc::Mbc, ppu::Ppu, joypad::Joypad, timer::Timer};
+use crate::{mbc::{Mbc, NoMbc, Mbc1}, ppu::Ppu, joypad::Joypad, timer::Timer, rom::{Rom}};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
@@ -17,7 +19,40 @@ pub struct Bus {
 }
 
 impl Bus {
-    pub fn new(mbc: Box<dyn Mbc>, ppu: Ppu) -> Self {
+    pub fn new(reader: &mut BufReader<File>) -> Self {
+        let rom = Rom::new(reader).unwrap();
+        let rom_type = rom.cartridge_type;
+        let rom_size = rom.rom_size;
+        let ram_size = rom.ram_size;
+
+        let mbc: Box<dyn Mbc> = match rom_type {
+            0x00 => {
+                Box::new(
+                    NoMbc {
+                        rom,
+                        mbc_type: rom_type,
+                    }
+                )
+            },
+            0x01 | 0x02 | 0x03 | _ => {
+                Box::new(
+                    Mbc1 {
+                        rom,
+                        mbc_type: rom_type,
+                        rom_size: rom_size,
+                        ram_size: ram_size,
+                        is_external_ram_enable: Default::default(),
+                        rom_bank_number: Default::default(),
+                        ram_bank_number: Default::default(),
+                        mode_flag: Default::default(),
+                        ram: [0; 0x8000]
+                    }
+                )
+            }
+        };
+
+        let ppu = Ppu::new();
+
         Self { 
             ram: [0; 0x8192],
             hram: [0; 0x127],
@@ -41,12 +76,12 @@ impl Bus {
             0xFE00..=0xFE9F => self.ppu.read_OAM(address-0xFE00),
             0xFEA0..=0xFEFF => Ok(0),
             0xFF00 => Ok(self.joypad.read()),
-            // 0xFF01..=0xFF7F => IO,
+            0xFF01..=0xFF03 => Ok(0),
             0xFF04 => Ok(self.timer.read_div()),
             0xFF05 => Ok(self.timer.read_tima()),
             0xFF06 => Ok(self.timer.read_tma()),
             0xFF07 => Ok(self.timer.read_tac()),
-            0xFF26 => Ok(0),
+            0xFF10..=0xFF3F => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF41 => self.ppu.read_lcd_stat(),
             0xFF42 => self.ppu.scy_read(),
@@ -92,7 +127,7 @@ impl Bus {
                 self.joypad.write(data);
                 Ok(())
             },
-            // 0xFF01..=0xFF7F => IO,
+            0xFF01..=0xFF03 => Ok(()),
             0xFF04 => {
                 self.timer.write_div(data);
                 Ok(())
@@ -113,7 +148,7 @@ impl Bus {
                 self.int_flag = data;
                 Ok(())
             },
-            0xFF26 => Ok(()),
+            0xFF10..=0xFF3F => Ok(()),
             0xFF40 => self.ppu.lcd_control_write(data),
             0xFF41 => self.ppu.write_lcd_stat(data),
             0xFF42 => self.ppu.scy_write(data),
