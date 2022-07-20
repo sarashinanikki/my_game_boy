@@ -2601,7 +2601,7 @@ impl Cpu {
         let cf: bool = self.get_carry_flag();
         let carry_val: u8 = if cf { 1 } else { 0 };
 
-        self.base_sbc(left, carry_val, data, false)
+        self.base_sbc(left, carry_val, data, true)
     }
 
     fn sbc_9E(&mut self) -> Result<u8> {
