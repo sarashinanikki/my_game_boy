@@ -7,9 +7,6 @@ pub trait Mbc {
     fn read_ram(&self, address: u16) -> Result<u8> {
         Ok(0)
     }
-    fn write_rom(&mut self, address: u16, data: u8) -> Result<()> {
-        Ok(())
-    }
     fn write_ram(&mut self, address: u16, data: u8) -> Result<()> {
         Ok(())
     }
