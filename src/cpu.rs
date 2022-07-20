@@ -1511,8 +1511,8 @@ impl Cpu {
 
     #[allow(dead_code)]
     fn stop(&mut self) -> Result<u8> {
-        self.halt = true;
-        self.bus.timer.is_stop = true;
+        // self.halt = true;
+        // self.bus.timer.is_stop = true;
         // TODO: LCDディスプレイも止める実装をする
         Ok(4)
     }
