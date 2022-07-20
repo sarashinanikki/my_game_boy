@@ -392,7 +392,7 @@ impl Ppu {
                     tile_vertical_offset = 14 - tile_vertical_offset;
                 }
                 
-                let tile_address = (tile_number * 16 + tile_vertical_offset) as usize;
+                let tile_address = tile_number as usize * 16 + tile_vertical_offset as usize;
 
                 let lower_tile_data = self.vram[tile_address];
                 let higher_tile_data = self.vram[tile_address + 1];
