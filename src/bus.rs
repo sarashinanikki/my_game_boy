@@ -39,8 +39,8 @@ impl Bus {
                     Mbc1 {
                         rom,
                         mbc_type: rom_type,
-                        rom_size: rom_size,
-                        ram_size: ram_size,
+                        rom_size,
+                        ram_size,
                         is_external_ram_enable: Default::default(),
                         rom_bank_number: Default::default(),
                         ram_bank_number: Default::default(),
@@ -81,6 +81,7 @@ impl Bus {
             0xFF05 => Ok(self.timer.read_tima()),
             0xFF06 => Ok(self.timer.read_tma()),
             0xFF07 => Ok(self.timer.read_tac()),
+            0xFF0F => Ok(self.int_flag),
             0xFF10..=0xFF3F => Ok(0),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF41 => self.ppu.read_lcd_stat(),
@@ -93,7 +94,7 @@ impl Bus {
             0xFF48..=0xFF49 => self.ppu.read_obp(address),
             0xFF4A => self.ppu.wy_read(),
             0xFF4B => self.ppu.wx_read(),
-            0xFF0F => Ok(self.int_flag),
+            0xFF4C..=0xFF4E => Ok(0),
             0xFF80..=0xFFFE => Ok(self.hram[(address-0xFF80) as usize]),
             0xFFFF => Ok(self.ie_flag),
             _ => bail!("fail! invalid address")
@@ -110,7 +111,7 @@ impl Bus {
 
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
         match address {
-            0x0000..=0x7FFF => self.mbc.write_rom(address, data),
+            0x0000..=0x7FFF => self.mbc.write_registers(address, data),
             0x8000..=0x9FFF => self.ppu.write(address-0x8000, data),
             0xA000..=0xBFFF => self.mbc.write_ram(address-0xA000, data),
             0xC000..=0xDFFF => {
@@ -160,6 +161,7 @@ impl Bus {
             0xFF48..=0xFF49 => self.ppu.write_obp(address, data),
             0xFF4A => self.ppu.wy_write(data),
             0xFF4B => self.ppu.wx_write(data),
+            0xFF4C..=0xFF4E => Ok(()),
             0xFF80..=0xFFFE => {
                 self.hram[(address-0xFF80) as usize] = data;
                 Ok(())

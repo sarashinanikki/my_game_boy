@@ -17,28 +17,28 @@ pub struct Timer {
     
 
 impl Timer {
-    pub fn tick(&mut self, cycle: u8) {
+    pub fn tick(&mut self) {
         if self.is_stop {
             return;
         }
 
-        self.current_cycle = self.current_cycle.wrapping_add(cycle as u16);
+        self.current_cycle = self.current_cycle.wrapping_add(1);
         self.div = ((self.current_cycle >> 8) & 0xFF) as u8;
 
         let counter_bit = (self.current_cycle & self.clock_frequency_bit) == self.clock_frequency_bit;
         let and_result = counter_bit & self.int_timer_enable;
 
-        if !self.prev_and_result && and_result {
+        if self.prev_and_result && !and_result {
             let (new_tima, is_overflow) = self.tima.overflowing_add(1);
             self.tima = new_tima;
             self.is_overflowing = is_overflow;
         }
 
         if self.is_overflowing {
-            self.after_overflow_cycle += cycle;
-            if self.after_overflow_cycle > 4 {
-                self.after_overflow_cycle = 0;
+            self.after_overflow_cycle = self.after_overflow_cycle.wrapping_add(1);
+            if self.after_overflow_cycle == 4 {
                 self.tima = self.tma;
+                self.after_overflow_cycle = 0;
                 self.int_timer_flag = true;
                 self.is_overflowing = false;
             }
