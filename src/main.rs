@@ -44,6 +44,7 @@ fn main() {
     let mut reader = BufReader::new(File::open(file_path).unwrap());
     let bus = bus::Bus::new(&mut reader);
     let mut cpu = cpu::Cpu::new(bus);
+    cpu.reset();
     
     event_loop.run(move |event, _, control_flow| {
         match event {
