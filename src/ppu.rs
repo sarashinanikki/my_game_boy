@@ -152,14 +152,13 @@ impl Ppu {
                     if self.ly < 144 {
                         self.mode = Mode::OamScan;
                         self.handle_mode2_interrupt();
-                        self.handle_lyc_ly_interrupt();
                     }
                     else if self.ly == 144 {
                         self.mode = Mode::VBlank;
                         self.int_vblank = true;
                         self.handle_mode1_interrupt();
-                        self.handle_lyc_ly_interrupt();
                     }
+                    self.handle_lyc_ly_interrupt();
                 }
             },
             Mode::VBlank => {
@@ -170,6 +169,7 @@ impl Ppu {
                     if self.ly == 0 {
                         self.current_cycle = 0;
                         self.mode = Mode::OamScan;
+                        self.handle_lyc_ly_interrupt();
                         self.handle_mode2_interrupt();
                     }
                 }
@@ -431,12 +431,12 @@ impl Ppu {
                 // offsetが16以上 -> 下側のタイル
                 let tile_address = if tile_vertical_offset >= 16 {
                     let bottom_tile_number = tile_number | 0x01;
-                    (bottom_tile_number * 16 + (tile_vertical_offset - 16)) as usize
+                    (bottom_tile_number as usize * 16 + (tile_vertical_offset as usize - 16)) as usize
                 }
                 // offsetが16未満 -> 上側のタイル
                 else {
                     let top_tile_number = tile_number & 0xFE;
-                    (top_tile_number * 16 + tile_vertical_offset) as usize
+                    (top_tile_number as usize * 16 + tile_vertical_offset as usize) as usize
                 };
 
                 let lower_tile_data = self.vram[tile_address];
@@ -732,13 +732,12 @@ impl Ppu {
         let is_equal = self.ly == self.lyc;
         if is_equal {
             self.lcd_stat |= 1 << 2;
+            if (self.lcd_stat & (1 << 6)) == (1 << 6) {
+                self.int_lcd_stat = true;
+            }
         }
         else {
             self.lcd_stat &= !(1 << 2);
-        }
-
-        if (self.lcd_stat & (1 << 6)) == (1 << 6) && is_equal {
-            self.int_lcd_stat = true;
         }
     }
 
