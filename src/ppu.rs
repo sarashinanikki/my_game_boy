@@ -218,9 +218,10 @@ impl Ppu {
         self.bg_fifo.clear();
         self.sprite_fifo.clear();
         self.window_line_flag = false;
-        for x_position_counter in 0..160 {
+        // spriteの描画のために-7から始める
+        for x_position_counter in -7_isize..160_isize {
             // check is window rendered
-            if self.is_window_rendering(x_position_counter) {
+            if x_position_counter >= 0 && self.is_window_rendering(x_position_counter as u8) {
                 // 先程までBGを描画していた場合はピクセルデータをすべて破棄
                 if !self.render_window_flag {
                     self.bg_fifo.clear();
@@ -232,7 +233,7 @@ impl Ppu {
                 // この行にWindowの描画があったかを判定するflag(window_line_counterのインクリメント判定に使う)
                 self.window_line_flag = true;
                 if self.bg_fifo.is_empty() {
-                    self.window_fetch(x_position_counter);
+                    self.window_fetch(x_position_counter as u8);
                 }
             }
             else {
@@ -244,49 +245,59 @@ impl Ppu {
             }
 
             // bg fetch
-            if self.bg_fifo.is_empty() {
-                self.bg_fetch(scan_line, x_position_counter);
+            if x_position_counter >= 0 && self.bg_fifo.is_empty() {
+                self.bg_fetch(scan_line, x_position_counter as u8);
             }
 
             // sprite fetch
-            if self.sprite_fifo.is_empty() && self.read_lcd_bit(1) {
+            if self.read_lcd_bit(1) {
                 self.oam_fetch(x_position_counter);
             }
 
-            if x_position_counter == 0 && !self.is_window_rendering(x_position_counter) {
+            if x_position_counter == 0 && !self.is_window_rendering(x_position_counter as u8) {
                 let discard = self.scx % 8;
                 for _ in 0..discard {
                     self.bg_fifo.pop_front();
                 }
             }
 
-            let bg_color_idx = self.bg_fifo.pop_front().unwrap().color;
-            let sprite_pixel = self.sprite_fifo.pop_front().unwrap_or(PixelData{
-                color: 0,
-                background_priority: 0,
-                palette: 0,
-                sprite_priority: 0
-            });
-
-            // merge
-            let color = match sprite_pixel.color {
-                0 => self.apply_bg_pixel_color(bg_color_idx),
-                _ => {
-                    if sprite_pixel.sprite_priority > 0 && bg_color_idx != 0 {
-                        self.apply_bg_pixel_color(bg_color_idx)
+            if x_position_counter < 0 {
+                self.sprite_fifo.pop_front().unwrap_or(PixelData{
+                    color: 0,
+                    background_priority: 0,
+                    palette: 0,
+                    sprite_priority: 0
+                });
+            }
+            else {
+                let bg_color_idx = self.bg_fifo.pop_front().unwrap().color;
+                let sprite_pixel = self.sprite_fifo.pop_front().unwrap_or(PixelData{
+                    color: 0,
+                    background_priority: 0,
+                    palette: 0,
+                    sprite_priority: 0
+                });
+    
+                // merge
+                let color = match sprite_pixel.color {
+                    0 => self.apply_bg_pixel_color(bg_color_idx),
+                    _ => {
+                        if sprite_pixel.sprite_priority > 0 && bg_color_idx != 0 {
+                            self.apply_bg_pixel_color(bg_color_idx)
+                        }
+                        else {
+                            let sp_color_idx = sprite_pixel.color;
+                            // println!("x = {}, y = {}, color_idx = {}", x_position_counter, self.ly, sp_color_idx);
+                            let palette = sprite_pixel.palette;
+                            self.apply_sprite_pixel_color(sp_color_idx, palette)
+                        }
                     }
-                    else {
-                        let sp_color_idx = sprite_pixel.color;
-                        // println!("x = {}, y = {}, color_idx = {}", x_position_counter, self.ly, sp_color_idx);
-                        let palette = sprite_pixel.palette;
-                        self.apply_sprite_pixel_color(sp_color_idx, palette)
-                    }
+                };
+    
+                // push
+                for i in 0..4 {
+                    self.frame_buffer[(scan_line as usize * 160 + x_position_counter as usize) as usize][i] = color[i];
                 }
-            };
-
-            // push
-            for i in 0..4 {
-                self.frame_buffer[(scan_line as usize * 160 + x_position_counter as usize) as usize][i] = color[i];
             }
         }
 
@@ -389,15 +400,14 @@ impl Ppu {
         }
     }
 
-    fn oam_fetch(&mut self, x_coordinate: u8) {
+    fn oam_fetch(&mut self, x_coordinate: isize) {
         let target_sprite = self.sprite_buffer.iter().find(|el| {
-            el.0.x_position == x_coordinate + 8
+            el.0.x_position == (x_coordinate + 8) as u8
         });
 
         if let Some(target) = target_sprite {
             // 必要な変数の準備
             let y_position = target.0.y_position;
-            let x_position = target.0.x_position;
             let tile_number = target.0.tile_number;
             let sprite_flags = target.0.sprite_flags;
 
@@ -408,7 +418,6 @@ impl Ppu {
             let scan_line = self.ly;
 
             let sprite_size = if self.read_lcd_bit(2) { 16u8 } else { 8u8 };
-            let x_limit = x_position.wrapping_sub(x_coordinate);
             
             // spriteのサイズで場合分け
             if sprite_size == 8 {
@@ -438,10 +447,13 @@ impl Ppu {
                         sprite_priority: 0 // only relevant for CGB
                     };
 
-                    self.sprite_fifo.push_back(pixel_data);
-
-                    if self.sprite_fifo.len() >= x_limit as usize {
-                        break;
+                    if let Some(cur_pixel) = self.sprite_fifo.get_mut(i as usize) {
+                        if cur_pixel.color == 0 {
+                            *cur_pixel = pixel_data;
+                        }
+                    }
+                    else {
+                        self.sprite_fifo.push_back(pixel_data);
                     }
                 }
             }
@@ -483,10 +495,13 @@ impl Ppu {
                         sprite_priority: 0 // only relevant for CGB
                     };
 
-                    self.sprite_fifo.push_back(pixel_data);
-
-                    if self.sprite_fifo.len() >= x_limit as usize {
-                        break;
+                    if let Some(cur_pixel) = self.sprite_fifo.get_mut(i as usize) {
+                        if cur_pixel.color == 0 {
+                            *cur_pixel = pixel_data;
+                        }
+                    }
+                    else {
+                        self.sprite_fifo.push_back(pixel_data);
                     }
                 }
             }
