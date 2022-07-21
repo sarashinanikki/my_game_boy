@@ -77,8 +77,8 @@ impl Mbc for Mbc1 {
                     }
                 };
 
-                let address = 0x4000 * high_bank_number as u16 + (raw_address - 0x4000);
-                let ret = self.rom.data[address as usize];
+                let address = 0x4000 * high_bank_number as usize + (raw_address as usize - 0x4000);
+                let ret = self.rom.data[address];
                 Ok(ret)
             },
             _ => bail!("Error in mbc1: invalid address")

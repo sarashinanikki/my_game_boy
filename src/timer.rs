@@ -70,12 +70,12 @@ impl Timer {
 
     pub fn write_tima(&mut self, data: u8) {
         self.tima = data;
+        self.is_overflowing = false;
+        self.after_overflow_cycle = 0;
     }
 
     pub fn write_tma(&mut self, data: u8) {
         self.tma = data;
-        self.is_overflowing = false;
-        self.after_overflow_cycle = 0;
     }
 
     pub fn write_tac(&mut self, data: u8) {

@@ -77,6 +77,8 @@ pub struct Ppu {
     lyc: u8,
     wy: u8,
     wx: u8,
+    render_window_flag: bool,
+    window_line_flag: bool,
     bgp: u8,
     obp: [u8; 2],
     window_line_counter: u8,
@@ -105,6 +107,8 @@ impl Ppu {
             lyc: Default::default(),
             wy: Default::default(),
             wx: Default::default(),
+            render_window_flag: Default::default(),
+            window_line_flag: Default::default(),
             bgp: Default::default(),
             obp: Default::default(),
             window_line_counter: Default::default(),
@@ -140,26 +144,30 @@ impl Ppu {
             },
             Mode::Drawing => {
                 if self.current_cycle >= 252 {
+                    self.fetch();
                     self.mode = Mode::HBlank;
                     self.handle_mode0_interrupt();
-                    self.fetch();
                 }
             },
             Mode::HBlank => {
                 if self.current_cycle >= 456 {
                     self.current_cycle = 0;
                     self.ly += 1;
+                    if self.window_line_flag {
+                        self.window_line_counter = self.window_line_counter.wrapping_add(1);
+                    }
                     if self.ly < 144 {
                         self.mode = Mode::OamScan;
                         self.handle_mode2_interrupt();
-                        self.handle_lyc_ly_interrupt();
                     }
                     else if self.ly == 144 {
                         self.mode = Mode::VBlank;
                         self.int_vblank = true;
                         self.handle_mode1_interrupt();
-                        self.handle_lyc_ly_interrupt();
                     }
+                    self.handle_lyc_ly_interrupt();
+                    self.render_window_flag = false;
+                    self.window_line_flag = false;
                 }
             },
             Mode::VBlank => {
@@ -170,6 +178,7 @@ impl Ppu {
                     if self.ly == 0 {
                         self.current_cycle = 0;
                         self.mode = Mode::OamScan;
+                        self.handle_lyc_ly_interrupt();
                         self.handle_mode2_interrupt();
                     }
                 }
@@ -208,57 +217,87 @@ impl Ppu {
         let scan_line = self.ly;
         self.bg_fifo.clear();
         self.sprite_fifo.clear();
-        for x_position_counter in 0..160 {
+        self.window_line_flag = false;
+        // spriteの描画のために-7から始める
+        for x_position_counter in -7_isize..160_isize {
             // check is window rendered
-            if self.is_window_rendering(x_position_counter) {
-                self.bg_fifo.clear();
-                self.window_fetch(x_position_counter);
+            if x_position_counter >= 0 && self.is_window_rendering(x_position_counter as u8) {
+                // 先程までBGを描画していた場合はピクセルデータをすべて破棄
+                if !self.render_window_flag {
+                    self.bg_fifo.clear();
+                }
+
+                // これまでBGとWindowどちらを描画していたか判定するflag
+                self.render_window_flag = true;
+
+                // この行にWindowの描画があったかを判定するflag(window_line_counterのインクリメント判定に使う)
+                self.window_line_flag = true;
+                if self.bg_fifo.is_empty() {
+                    self.window_fetch(x_position_counter as u8);
+                }
+            }
+            else {
+                // ここまでwindowを描画していた場合はピクセルデータをすべて破棄
+                if self.render_window_flag {
+                    self.bg_fifo.clear();
+                }
+                self.render_window_flag = false;
             }
 
             // bg fetch
-            if self.bg_fifo.is_empty() {
-                self.bg_fetch(scan_line, x_position_counter);
+            if x_position_counter >= 0 && self.bg_fifo.is_empty() {
+                self.bg_fetch(scan_line, x_position_counter as u8);
             }
 
             // sprite fetch
-            if self.sprite_fifo.is_empty() && self.read_lcd_bit(1) {
+            if self.read_lcd_bit(1) {
                 self.oam_fetch(x_position_counter);
             }
 
-            if x_position_counter == 0 && !self.is_window_rendering(x_position_counter) {
+            if x_position_counter == 0 && !self.is_window_rendering(x_position_counter as u8) {
                 let discard = self.scx % 8;
                 for _ in 0..discard {
                     self.bg_fifo.pop_front();
                 }
             }
 
-            let bg_color_idx = self.bg_fifo.pop_front().unwrap().color;
-            let sprite_pixel = self.sprite_fifo.pop_front().unwrap_or(PixelData{
-                color: 0,
-                background_priority: 0,
-                palette: 0,
-                sprite_priority: 0
-            });
-
-            // merge
-            let color = match sprite_pixel.color {
-                0 => self.apply_bg_pixel_color(bg_color_idx),
-                _ => {
-                    if sprite_pixel.sprite_priority > 0 && bg_color_idx != 0 {
-                        self.apply_bg_pixel_color(bg_color_idx)
+            if x_position_counter < 0 {
+                self.sprite_fifo.pop_front().unwrap_or(PixelData{
+                    color: 0,
+                    background_priority: 0,
+                    palette: 0,
+                    sprite_priority: 0
+                });
+            }
+            else {
+                let bg_color_idx = self.bg_fifo.pop_front().unwrap().color;
+                let sprite_pixel = self.sprite_fifo.pop_front().unwrap_or(PixelData{
+                    color: 0,
+                    background_priority: 0,
+                    palette: 0,
+                    sprite_priority: 0
+                });
+    
+                // merge
+                let color = match sprite_pixel.color {
+                    0 => self.apply_bg_pixel_color(bg_color_idx),
+                    _ => {
+                        if sprite_pixel.background_priority > 0 && bg_color_idx != 0 {
+                            self.apply_bg_pixel_color(bg_color_idx)
+                        }
+                        else {
+                            let sp_color_idx = sprite_pixel.color;
+                            // println!("x = {}, y = {}, color_idx = {}", x_position_counter, self.ly, sp_color_idx);
+                            let palette = sprite_pixel.palette;
+                            self.apply_sprite_pixel_color(sp_color_idx, palette)
+                        }
                     }
-                    else {
-                        let sp_color_idx = sprite_pixel.color;
-                        // println!("x = {}, y = {}, color_idx = {}", x_position_counter, self.ly, sp_color_idx);
-                        let palette = sprite_pixel.palette;
-                        self.apply_sprite_pixel_color(sp_color_idx, palette)
-                    }
+                };
+    
+                // push
+                for i in 0..4 {
+                    self.frame_buffer[(scan_line as usize * 160 + x_position_counter as usize) as usize][i] = color[i];
                 }
-            };
-
-            // push
-            for i in 0..4 {
-                self.frame_buffer[(scan_line as usize * 160 + x_position_counter as usize) as usize][i] = color[i];
             }
         }
 
@@ -336,7 +375,7 @@ impl Ppu {
 
     fn is_window_rendering(&self, x_coordinate: u8) -> bool {
         let lcd5 = self.read_lcd_bit(5);
-        let is_window_line = self.wy == self.ly;
+        let is_window_line = self.wy <= self.ly;
         let is_window_x_pos = x_coordinate + 7 >= self.wx;
 
         return lcd5 && is_window_line && is_window_x_pos;
@@ -361,15 +400,14 @@ impl Ppu {
         }
     }
 
-    fn oam_fetch(&mut self, x_coordinate: u8) {
+    fn oam_fetch(&mut self, x_coordinate: isize) {
         let target_sprite = self.sprite_buffer.iter().find(|el| {
-            el.0.x_position == x_coordinate + 8
+            el.0.x_position == (x_coordinate + 8) as u8
         });
 
         if let Some(target) = target_sprite {
             // 必要な変数の準備
             let y_position = target.0.y_position;
-            let x_position = target.0.x_position;
             let tile_number = target.0.tile_number;
             let sprite_flags = target.0.sprite_flags;
 
@@ -380,7 +418,6 @@ impl Ppu {
             let scan_line = self.ly;
 
             let sprite_size = if self.read_lcd_bit(2) { 16u8 } else { 8u8 };
-            let x_limit = x_position.wrapping_sub(x_coordinate);
             
             // spriteのサイズで場合分け
             if sprite_size == 8 {
@@ -392,7 +429,7 @@ impl Ppu {
                     tile_vertical_offset = 14 - tile_vertical_offset;
                 }
                 
-                let tile_address = (tile_number * 16 + tile_vertical_offset) as usize;
+                let tile_address = tile_number as usize * 16 + tile_vertical_offset as usize;
 
                 let lower_tile_data = self.vram[tile_address];
                 let higher_tile_data = self.vram[tile_address + 1];
@@ -410,10 +447,13 @@ impl Ppu {
                         sprite_priority: 0 // only relevant for CGB
                     };
 
-                    self.sprite_fifo.push_back(pixel_data);
-
-                    if self.sprite_fifo.len() >= x_limit as usize {
-                        break;
+                    if let Some(cur_pixel) = self.sprite_fifo.get_mut(i as usize) {
+                        if cur_pixel.color == 0 {
+                            *cur_pixel = pixel_data;
+                        }
+                    }
+                    else {
+                        self.sprite_fifo.push_back(pixel_data);
                     }
                 }
             }
@@ -431,12 +471,12 @@ impl Ppu {
                 // offsetが16以上 -> 下側のタイル
                 let tile_address = if tile_vertical_offset >= 16 {
                     let bottom_tile_number = tile_number | 0x01;
-                    (bottom_tile_number * 16 + (tile_vertical_offset - 16)) as usize
+                    (bottom_tile_number as usize * 16 + (tile_vertical_offset as usize - 16)) as usize
                 }
                 // offsetが16未満 -> 上側のタイル
                 else {
                     let top_tile_number = tile_number & 0xFE;
-                    (top_tile_number * 16 + tile_vertical_offset) as usize
+                    (top_tile_number as usize * 16 + tile_vertical_offset as usize) as usize
                 };
 
                 let lower_tile_data = self.vram[tile_address];
@@ -455,10 +495,13 @@ impl Ppu {
                         sprite_priority: 0 // only relevant for CGB
                     };
 
-                    self.sprite_fifo.push_back(pixel_data);
-
-                    if self.sprite_fifo.len() >= x_limit as usize {
-                        break;
+                    if let Some(cur_pixel) = self.sprite_fifo.get_mut(i as usize) {
+                        if cur_pixel.color == 0 {
+                            *cur_pixel = pixel_data;
+                        }
+                    }
+                    else {
+                        self.sprite_fifo.push_back(pixel_data);
                     }
                 }
             }
@@ -525,14 +568,14 @@ impl Ppu {
     }
 
     fn window_fetch(&mut self, x_coordinate: u8) {
-        let lcd4 = self.read_lcd_bit(6);
-        let lcd3 = self.read_lcd_bit(3);
+        let lcd4 = self.read_lcd_bit(4);
+        let lcd6 = self.read_lcd_bit(6);
 
         // fetch tile number
-        let window_tile_map_address: u16 = if lcd3 { 0x1C00 } else { 0x1800 };
-
-        let window_x = x_coordinate.wrapping_sub(self.wx);
-
+        let window_tile_map_address: u16 = if lcd6 { 0x1C00 } else { 0x1800 };
+        
+        let window_x = x_coordinate.wrapping_add(7).wrapping_sub(self.wx);
+        
         // タイル番号の横幅は0~31までなので0x1f(31)でandする
         let x_offset = ((window_x as u16) / 8) & 0x1F;
         let y_offset = ((self.window_line_counter as u16) / 8) * 32;
@@ -732,13 +775,12 @@ impl Ppu {
         let is_equal = self.ly == self.lyc;
         if is_equal {
             self.lcd_stat |= 1 << 2;
+            if (self.lcd_stat & (1 << 6)) == (1 << 6) {
+                self.int_lcd_stat = true;
+            }
         }
         else {
             self.lcd_stat &= !(1 << 2);
-        }
-
-        if (self.lcd_stat & (1 << 6)) == (1 << 6) && is_equal {
-            self.int_lcd_stat = true;
         }
     }
 

@@ -52,6 +52,16 @@ impl Cpu {
         }
     }
 
+    pub fn reset (&mut self) {
+        self.A = 0x01;
+        self.F = 0xB0;
+        self.set_bc(0x0013);
+        self.set_de(0x00D8);
+        self.set_hl(0x014D);
+        self.SP = 0xFFFE;
+        self.PC = 0x0100;
+    }
+
     // メインループ
     pub fn run(&mut self) -> Result<()> {
         let max_cycle: usize = 70224;
@@ -977,7 +987,6 @@ impl Cpu {
         let stack_address = self.SP;
         self.bus.write_16(stack_address, self.PC)?;
         self.PC = address;
-        self.jmp_flag = true;
 
         Ok(24)
     }
