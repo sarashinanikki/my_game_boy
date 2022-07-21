@@ -282,7 +282,7 @@ impl Ppu {
                 let color = match sprite_pixel.color {
                     0 => self.apply_bg_pixel_color(bg_color_idx),
                     _ => {
-                        if sprite_pixel.sprite_priority > 0 && bg_color_idx != 0 {
+                        if sprite_pixel.background_priority > 0 && bg_color_idx != 0 {
                             self.apply_bg_pixel_color(bg_color_idx)
                         }
                         else {
