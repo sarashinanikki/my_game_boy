@@ -77,6 +77,8 @@ pub struct Ppu {
     lyc: u8,
     wy: u8,
     wx: u8,
+    render_window_flag: bool,
+    window_line_flag: bool,
     bgp: u8,
     obp: [u8; 2],
     window_line_counter: u8,
@@ -105,6 +107,8 @@ impl Ppu {
             lyc: Default::default(),
             wy: Default::default(),
             wx: Default::default(),
+            render_window_flag: Default::default(),
+            window_line_flag: Default::default(),
             bgp: Default::default(),
             obp: Default::default(),
             window_line_counter: Default::default(),
@@ -140,15 +144,18 @@ impl Ppu {
             },
             Mode::Drawing => {
                 if self.current_cycle >= 252 {
+                    self.fetch();
                     self.mode = Mode::HBlank;
                     self.handle_mode0_interrupt();
-                    self.fetch();
                 }
             },
             Mode::HBlank => {
                 if self.current_cycle >= 456 {
                     self.current_cycle = 0;
                     self.ly += 1;
+                    if self.window_line_flag {
+                        self.window_line_counter = self.window_line_counter.wrapping_add(1);
+                    }
                     if self.ly < 144 {
                         self.mode = Mode::OamScan;
                         self.handle_mode2_interrupt();
@@ -159,6 +166,8 @@ impl Ppu {
                         self.handle_mode1_interrupt();
                     }
                     self.handle_lyc_ly_interrupt();
+                    self.render_window_flag = false;
+                    self.window_line_flag = false;
                 }
             },
             Mode::VBlank => {
@@ -208,11 +217,30 @@ impl Ppu {
         let scan_line = self.ly;
         self.bg_fifo.clear();
         self.sprite_fifo.clear();
+        self.window_line_flag = false;
         for x_position_counter in 0..160 {
             // check is window rendered
             if self.is_window_rendering(x_position_counter) {
-                self.bg_fifo.clear();
-                self.window_fetch(x_position_counter);
+                // 先程までBGを描画していた場合はピクセルデータをすべて破棄
+                if !self.render_window_flag {
+                    self.bg_fifo.clear();
+                }
+
+                // これまでBGとWindowどちらを描画していたか判定するflag
+                self.render_window_flag = true;
+
+                // この行にWindowの描画があったかを判定するflag(window_line_counterのインクリメント判定に使う)
+                self.window_line_flag = true;
+                if self.bg_fifo.is_empty() {
+                    self.window_fetch(x_position_counter);
+                }
+            }
+            else {
+                // ここまでwindowを描画していた場合はピクセルデータをすべて破棄
+                if self.render_window_flag {
+                    self.bg_fifo.clear();
+                }
+                self.render_window_flag = false;
             }
 
             // bg fetch
@@ -336,7 +364,7 @@ impl Ppu {
 
     fn is_window_rendering(&self, x_coordinate: u8) -> bool {
         let lcd5 = self.read_lcd_bit(5);
-        let is_window_line = self.wy == self.ly;
+        let is_window_line = self.wy <= self.ly;
         let is_window_x_pos = x_coordinate + 7 >= self.wx;
 
         return lcd5 && is_window_line && is_window_x_pos;
@@ -525,14 +553,14 @@ impl Ppu {
     }
 
     fn window_fetch(&mut self, x_coordinate: u8) {
-        let lcd4 = self.read_lcd_bit(6);
-        let lcd3 = self.read_lcd_bit(3);
+        let lcd4 = self.read_lcd_bit(4);
+        let lcd6 = self.read_lcd_bit(6);
 
         // fetch tile number
-        let window_tile_map_address: u16 = if lcd3 { 0x1C00 } else { 0x1800 };
-
-        let window_x = x_coordinate.wrapping_sub(self.wx);
-
+        let window_tile_map_address: u16 = if lcd6 { 0x1C00 } else { 0x1800 };
+        
+        let window_x = x_coordinate.wrapping_add(7).wrapping_sub(self.wx);
+        
         // タイル番号の横幅は0~31までなので0x1f(31)でandする
         let x_offset = ((window_x as u16) / 8) & 0x1F;
         let y_offset = ((self.window_line_counter as u16) / 8) * 32;
