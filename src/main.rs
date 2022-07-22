@@ -111,6 +111,9 @@ fn main() {
                     },
                     _ => {}
                 },
+                WindowEvent::Resized(size) => {
+                    pixels.resize_surface(size.width, size.height);
+                },
                 _ => {}
             },
             Event::MainEventsCleared => {
