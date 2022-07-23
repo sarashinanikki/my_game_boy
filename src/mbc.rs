@@ -1,3 +1,5 @@
+use std::{fs::File, io::{BufReader, Read, self, Write}};
+
 use anyhow::{Result, bail};
 
 use crate::rom::Rom;
@@ -11,6 +13,12 @@ pub trait Mbc {
         Ok(())
     }
     fn write_registers(&mut self, address: u16, data: u8) -> Result<()> {
+        Ok(())
+    }
+    fn read_save_file(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn write_save_file(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -167,6 +175,29 @@ impl Mbc for Mbc1 {
         }
         Ok(())
     }
+
+    fn read_save_file(&mut self) -> Result<()> {
+        // save機能対応の場合はRAM内容を読み込む
+        if self.mbc_type == 0x03 {
+            let file = File::open("save_file");
+            if let Ok(f) = file {
+                let mut reader = BufReader::new(f);
+                reader.read_exact(&mut self.ram).unwrap();
+            }
+        }
+        Ok(())
+    }
+    
+    fn write_save_file(&mut self) -> Result<()> {
+        if self.mbc_type == 0x03 {
+            // save機能対応の場合はRAM内容をファイルとして書き出す
+            let mut save_file = File::create("save_file")?;
+            let buf = self.ram.bytes().collect::<io::Result<Vec<u8>>>()?;
+            save_file.write_all(&buf)?;
+            save_file.flush()?;
+        }
+        Ok(())
+    }
 }
 
 impl Mbc for Mbc5 {
@@ -200,6 +231,18 @@ impl Mbc for Mbc5 {
         if self.is_external_ram_enable {
             let address = 0x2000 * self.ram_bank_number as usize + (raw_address as usize - 0xA000);
             self.ram[address] = data;
+
+            match self.mbc_type {
+                0x1B | 0x1E => {
+                    // save機能対応の場合はRAM内容をファイルとして書き出す
+                    let mut save_file = File::create("save_file")?;
+                    let buf = self.ram.bytes().collect::<io::Result<Vec<u8>>>()?;
+                    save_file.write_all(&buf)?;
+                    save_file.flush()?;
+                },
+                _ => {}
+            }
+
             Ok(())
         }
         else {
@@ -226,6 +269,36 @@ impl Mbc for Mbc5 {
             0x4000..=0x5FFF => self.ram_bank_number = data & 0x0F,
             _ => {}
         }
+        Ok(())
+    }
+
+    fn read_save_file(&mut self) -> Result<()> {
+        match self.mbc_type {
+            0x1B | 0x1E => {
+                // save機能対応の場合はRAM内容をファイルとして書き出す
+                let mut save_file = File::create("save_file")?;
+                let buf = self.ram.bytes().collect::<io::Result<Vec<u8>>>()?;
+                save_file.write_all(&buf)?;
+                save_file.flush()?;
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn write_save_file(&mut self) -> Result<()> {
+        match self.mbc_type {
+            0x1B | 0x1E => {
+                // save機能対応の場合はRAM内容をファイルとして書き出す
+                let mut save_file = File::create("save_file")?;
+                let buf = self.ram.bytes().collect::<io::Result<Vec<u8>>>()?;
+                save_file.write_all(&buf)?;
+                save_file.flush()?;
+            },
+            _ => {}
+        }
+
         Ok(())
     }
 }

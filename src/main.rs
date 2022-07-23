@@ -45,11 +45,13 @@ fn main() {
     let bus = bus::Bus::new(&mut reader);
     let mut cpu = cpu::Cpu::new(bus);
     cpu.reset();
+    cpu.bus.mbc.read_save_file().unwrap();
     
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
+                    cpu.bus.mbc.write_save_file().unwrap();
                     *control_flow = ControlFlow::Exit
                 },
                 WindowEvent::KeyboardInput { 
@@ -109,6 +111,22 @@ fn main() {
                             ElementState::Released => cpu.bus.joypad.release(Button::Start)
                         }
                     },
+                    VirtualKeyCode::N => {
+                        match button_state {
+                            ElementState::Pressed => {
+                                cpu.debug_flag ^= true;
+                            },
+                            ElementState::Released => {}
+                        }
+                    },
+                    VirtualKeyCode::M => {
+                        match button_state {
+                            ElementState::Pressed => {
+                                cpu.step_flag ^= true;
+                            },
+                            ElementState::Released => {}
+                        }
+                    }
                     _ => {}
                 },
                 WindowEvent::Resized(size) => {
@@ -117,13 +135,6 @@ fn main() {
                 _ => {}
             },
             Event::MainEventsCleared => {
-                if input.update(&event) {
-                    if input.key_released(VirtualKeyCode::Escape) || input.quit() {
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
-                }
-
                 let start = Instant::now();
                 cpu.run().unwrap();
                 let duration = start.elapsed().as_micros();
