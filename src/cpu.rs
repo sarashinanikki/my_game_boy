@@ -17,8 +17,8 @@ pub struct Cpu {
     pub bus: Bus,
     halt: bool,
     ime: bool,
-    step_flag: bool,
-    debug_flag: bool,
+    pub step_flag: bool,
+    pub debug_flag: bool,
     break_points: Vec<u16>,
     jmp_flag: bool
 }
@@ -252,11 +252,9 @@ impl Cpu {
     // デバッグ情報を出力
     fn debug_output(&self, opcode: &Opcode) {
         println!(
-            "PC: {:X}, opcode: {:X}, CB: {}\n 
-            A: {:X}, B: {:X}, C: {:X}, D: {:X}, E: {:X}, F: {:X}, H: {:X}, L: {:X}, SP: {:X}, AF: {:X}, BC: {:X}, DE: {:X}, HL: {:X}",
-            self.PC, opcode.code, opcode.cb_prefix, self.A, self.B, self.C, self.D, self.E, self.F, self.H, self.L, self.SP,
-            self.get_af(), self.get_bc(), self.get_de(), self.get_hl()
-        )
+            "PC: {:#04X}, OPECODE: {:#02X}, A: {:#02X}, BC: {:#04X}, DE: {:#04X}, HL: {:#04X}, SP: {:#04X} FLAGS: {:#02X}",
+            self.PC, opcode.code, self.A, self.get_bc(), self.get_de(), self.get_hl(), self.SP, self.F
+        );
     }
 
     // 命令の読み込み
@@ -705,7 +703,7 @@ impl Cpu {
         }
 
         if h {
-            f |= 1 << 5
+            f |= 1 << 5;
         }
 
         if c {

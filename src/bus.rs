@@ -2,7 +2,7 @@ use std::{io::BufReader, fs::File};
 
 use anyhow::{Result, bail};
 
-use crate::{mbc::{Mbc, NoMbc, Mbc1}, ppu::Ppu, joypad::Joypad, timer::Timer, rom::{Rom}};
+use crate::{mbc::{Mbc, NoMbc, Mbc1, Mbc5}, ppu::Ppu, joypad::Joypad, timer::Timer, rom::Rom};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
@@ -34,7 +34,7 @@ impl Bus {
                     }
                 )
             },
-            0x01 | 0x02 | 0x03 | _ => {
+            0x01 | 0x02 | 0x03 => {
                 Box::new(
                     Mbc1 {
                         rom,
@@ -48,7 +48,20 @@ impl Bus {
                         ram: [0; 0x8000]
                     }
                 )
-            }
+            },
+            0x19..=0x1E | _ => {
+                Box::new(
+                    Mbc5 {
+                        rom,
+                        mbc_type: rom_type,
+                        is_external_ram_enable: Default::default(),
+                        rom_bank_number_low: Default::default(),
+                        rom_bank_number_high: Default::default(),
+                        ram_bank_number: Default::default(),
+                        ram: [0; 0x20000]
+                    }
+                )
+            },
         };
 
         let ppu = Ppu::new();
@@ -70,7 +83,7 @@ impl Bus {
         match address {
             0x0000..=0x7FFF => self.mbc.read_rom(address),
             0x8000..=0x9FFF => self.ppu.read(address-0x8000),
-            0xA000..=0xBFFF => self.mbc.read_ram(address-0xA000),
+            0xA000..=0xBFFF => self.mbc.read_ram(address),
             0xC000..=0xDFFF => Ok(self.ram[(address-0xC000) as usize]),
             0xE000..=0xFDFF => Ok(self.ram[(address-0xE000) as usize]),
             0xFE00..=0xFE9F => self.ppu.read_OAM(address-0xFE00),
@@ -113,7 +126,7 @@ impl Bus {
         match address {
             0x0000..=0x7FFF => self.mbc.write_registers(address, data),
             0x8000..=0x9FFF => self.ppu.write(address-0x8000, data),
-            0xA000..=0xBFFF => self.mbc.write_ram(address-0xA000, data),
+            0xA000..=0xBFFF => self.mbc.write_ram(address, data),
             0xC000..=0xDFFF => {
                 self.ram[(address-0xC000) as usize] = data;
                 Ok(())
