@@ -2,16 +2,17 @@ use std::{io::BufReader, fs::File};
 
 use anyhow::{Result, bail};
 
-use crate::{mbc::{Mbc, NoMbc, Mbc1, Mbc5}, ppu::Ppu, joypad::Joypad, timer::Timer, rom::Rom};
+use crate::{mbc::{Mbc, NoMbc, Mbc1, Mbc5}, ppu::Ppu, joypad::Joypad, timer::Timer, rom::Rom, sound::Sound};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
     pub hram: [u8; 0x127],
     pub ppu: Ppu,
-    pub mbc: Box<dyn Mbc>,
+    pub mbc: Box<dyn Mbc + Send>,
     pub dma: u8,
     pub timer: Timer,
     pub joypad: Joypad,
+    pub sound: Sound,
     // interrupt enable
     pub ie_flag: u8,
     // interrupt flag
@@ -25,7 +26,7 @@ impl Bus {
         let rom_size = rom.rom_size;
         let ram_size = rom.ram_size;
 
-        let mbc: Box<dyn Mbc> = match rom_type {
+        let mbc: Box<dyn Mbc + Send> = match rom_type {
             0x00 => {
                 Box::new(
                     NoMbc {
@@ -65,6 +66,7 @@ impl Bus {
         };
 
         let ppu = Ppu::new();
+        let sound = Sound::new().unwrap();
 
         Self { 
             ram: [0; 0x8192],
@@ -74,6 +76,7 @@ impl Bus {
             timer: Default::default(),
             dma: Default::default(),
             joypad: Default::default(),
+            sound,
             ie_flag: Default::default(),
             int_flag: Default::default()
         }

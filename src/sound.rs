@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cpal;
-use dasp::{Signal, Sample, signal, ring_buffer};
+use dasp::{Signal, Sample, self as signal, ring_buffer, frame::Stereo};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -55,7 +55,7 @@ pub struct Sound {
     frame_sequence: u16,
     current_cycle: u16,
     sound_control: SoundControl,
-    sound_buffer: ring_buffer::Bounded<[[f32; 2]; 1024]>,
+    sound_buffer: ring_buffer::Bounded<Vec<Stereo<f32>>>,
     device: cpal::Device,
     config: cpal::StreamConfig
 }
@@ -74,7 +74,7 @@ impl Sound {
             frame_sequence: Default::default(),
             current_cycle: Default::default(),
             sound_control: Default::default(), 
-            sound_buffer: ring_buffer::Bounded::from([[0.0; 2]; 1024]),
+            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 44100]),
             device,
             config: config.into()
         };
@@ -84,15 +84,9 @@ impl Sound {
 
     pub fn tick(&mut self) {
 
-        let sampling_rate = self.config.sample_rate.0;
-        let cpu_frequency = 4194304_u32;
-        let sound_frequency = cpu_frequency / sampling_rate;
-        if self.current_cycle as u32 >= sound_frequency {
-            self.provide_sample();
-        }
     }
 
-    fn provide_sample(&mut self) {
-
+    pub fn get_sound_buffer(&mut self) -> &mut ring_buffer::Bounded<Vec<Stereo<f32>>> {
+        return &mut self.sound_buffer
     }
 }
