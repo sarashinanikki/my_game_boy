@@ -107,6 +107,8 @@ impl Cpu {
             // 一つずつ動かさないとbit操作が壊れるため、for文で動かす
             for _ in 0..op_cycle {
                 self.bus.timer.tick();
+                let div = self.bus.timer.read_div();
+                self.bus.sound.tick(div);
             }
 
             // 割り込みを実行する

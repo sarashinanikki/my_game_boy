@@ -20,7 +20,7 @@ pub struct Bus {
 }
 
 impl Bus {
-    pub fn new(reader: &mut BufReader<File>) -> Self {
+    pub fn new(reader: &mut BufReader<File>, sample_rate: usize) -> Self {
         let rom = Rom::new(reader).unwrap();
         let rom_type = rom.cartridge_type;
         let rom_size = rom.rom_size;
@@ -66,7 +66,7 @@ impl Bus {
         };
 
         let ppu = Ppu::new();
-        let sound = Sound::new().unwrap();
+        let sound = Sound::new(sample_rate).unwrap();
 
         Self { 
             ram: [0; 0x8192],
@@ -98,7 +98,7 @@ impl Bus {
             0xFF06 => Ok(self.timer.read_tma()),
             0xFF07 => Ok(self.timer.read_tac()),
             0xFF0F => Ok(self.int_flag),
-            0xFF10..=0xFF3F => Ok(0),
+            0xFF10..=0xFF3F => self.sound.read(address),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF41 => self.ppu.read_lcd_stat(),
             0xFF42 => self.ppu.scy_read(),
@@ -165,7 +165,7 @@ impl Bus {
                 self.int_flag = data;
                 Ok(())
             },
-            0xFF10..=0xFF3F => Ok(()),
+            0xFF10..=0xFF3F => self.sound.write(address, data),
             0xFF40 => self.ppu.lcd_control_write(data),
             0xFF41 => self.ppu.write_lcd_stat(data),
             0xFF42 => self.ppu.scy_write(data),

@@ -47,7 +47,13 @@ fn main() {
 
     let file_path = base_path + rom_name;
     let mut reader = BufReader::new(File::open(file_path).unwrap());
-    let bus = bus::Bus::new(&mut reader);
+
+    let host = cpal::default_host();
+    let device = host.default_output_device().expect("failed to find a default output device");
+    let config = device.default_output_config().unwrap();
+    let sample_rate = config.sample_rate().0 as usize;
+
+    let bus = bus::Bus::new(&mut reader, sample_rate);
     let cpu = Arc::new(Mutex::new(cpu::Cpu::new(bus)));
     
     {
@@ -70,16 +76,19 @@ fn main() {
 
     // 音声
     let cpu_sound = cpu.clone();
-    let host = cpal::default_host();
-    let device = host.default_output_device().expect("failed to find a default output device");
-    let config = device.default_output_config().unwrap();
-
     let channels = config.channels() as usize;
     let err_fn = |err: StreamError| eprintln!("an error occured in sound stream: {}", err);
     let stream = device.build_output_stream(
         &config.into(),
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            write_audio_data(data, channels, cpu_sound.lock().unwrap().bus.sound.get_sound_buffer())
+            for frame in data.chunks_mut(channels) {
+                let value: [f32; 2] = match cpu_sound.lock().unwrap().bus.sound.get_sound_buffer().pop() {
+                    Some(res) => res.map(|e| cpal::Sample::from::<f32>(&e)),
+                    None => Stereo::EQUILIBRIUM.map(|e| cpal::Sample::from::<f32>(&e)),
+                };
+        
+                frame.copy_from_slice(&value);
+            }
         },
         err_fn
     ).unwrap();
@@ -194,21 +203,4 @@ fn main() {
             _ => {}
         }
     })
-}
-
-fn write_audio_data<T> (
-    output: &mut[T],
-    channels: usize,
-    signal: &mut Bounded<Vec<[f32; 2]>>
-) where
-    T: cpal::Sample,
-{
-    for frame in output.chunks_mut(channels) {
-        let value: [T; 2] = match signal.pop() {
-            Some(res) => res.map(|e| cpal::Sample::from::<f32>(&e)),
-            None => Stereo::EQUILIBRIUM.map(|e| cpal::Sample::from::<f32>(&e)),
-        };
-
-        frame.copy_from_slice(&value);
-    }
 }
