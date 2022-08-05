@@ -20,7 +20,8 @@ pub struct Cpu {
     pub step_flag: bool,
     pub debug_flag: bool,
     break_points: Vec<u16>,
-    jmp_flag: bool
+    jmp_flag: bool,
+    pub sleep: bool
 }
 
 #[derive(Default)]
@@ -48,7 +49,8 @@ impl Cpu {
             step_flag: Default::default(),
             debug_flag: Default::default(),
             break_points: Default::default(),
-            jmp_flag: false
+            jmp_flag: false,
+            sleep: Default::default()
         }
     }
 
@@ -66,6 +68,7 @@ impl Cpu {
     pub fn run(&mut self) -> Result<()> {
         let max_cycle: usize = 70224;
         let mut current_cycle: usize = 0;
+        self.sleep = false;
         // self.step_flag = true;
         // self.debug_flag = true;
 
@@ -118,6 +121,7 @@ impl Cpu {
             current_cycle += op_cycle as usize;
         }
 
+        self.sleep = true;
         Ok(())
     }
 
