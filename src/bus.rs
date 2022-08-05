@@ -113,7 +113,7 @@ impl Bus {
             0xFF4C..=0xFF4E => Ok(0),
             0xFF80..=0xFFFE => Ok(self.hram[(address-0xFF80) as usize]),
             0xFFFF => Ok(self.ie_flag),
-            _ => Ok(0)
+            _ => Ok(0xFF)
         }
     }
 

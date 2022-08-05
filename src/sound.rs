@@ -30,21 +30,21 @@ impl Ch1 {
     pub fn read(&self, address: u16) -> Result<u8> {
         let data = match address {
             0 => {
-                (self.sweep_period << 4) + ((self.sweep_up as u8) << 3) + self.sweep_shift
+                ((self.sweep_period << 4) + ((!self.sweep_up as u8) << 3) + self.sweep_shift) | 0b10000000
             },
             1 => {
-                self.duty_pattern << 6
+                (self.duty_pattern << 6) | 0b111111
             },
             2 => {
                 (self.env_initial_volume << 4) + ((self.env_up as u8) << 3) + (self.env_period)
             },
             3 => {
-                (self.frequency & 0xFF) as u8
+                0xFF
             },
             4 => {
-                ((self.stop_flag as u8) << 6) + (self.frequency >> 8) as u8
+                ((self.stop_flag as u8) << 6) | 0b10111111
             },
-            _ => 0
+            _ => 0xFF
         };
 
         Ok(data)
@@ -53,7 +53,7 @@ impl Ch1 {
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
         match address {
             0 => {
-                self.sweep_period = data >> 4;
+                self.sweep_period = (data >> 4) & 0b111;
                 self.sweep_up = (data & (1 << 3)) == 0;
                 self.sweep_shift = data & 0b111;
             },
@@ -232,18 +232,18 @@ impl Ch2 {
     pub fn read(&self, address: u16) -> Result<u8> {
         let data = match address {
             1 => {
-                self.duty_pattern << 6
+                (self.duty_pattern << 6) | 0b00111111
             },
             2 => {
                 (self.env_initial_volume << 4) + ((self.env_up as u8) << 3) + (self.env_period)
             },
             3 => {
-                (self.frequency & 0xFF) as u8
+                0xFF
             },
             4 => {
-                ((self.stop_flag as u8) << 6) + (self.frequency >> 8) as u8
+                ((self.stop_flag as u8) << 6) | 0b10111111
             },
-            _ => 0
+            _ => 0xFF
         };
 
         Ok(data)
@@ -252,7 +252,7 @@ impl Ch2 {
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
         match address {
             1 => {
-                self.duty_pattern = data >> 6;
+                self.duty_pattern = (data >> 6) & 0b11;
                 self.length = data & 63;
             },
             2 => {
@@ -373,24 +373,24 @@ impl Ch3 {
     pub fn read(&self, address: u16) -> Result<u8> {
         let data = match address {
             0 => {
-                (self.enable as u8) << 7
+                ((self.enable as u8) << 7) | 0b01111111
             },
             1 => {
-                self.length
+                0xFF
             },
             2 => {
-                self.volume << 5
+                (self.volume << 5) | 0b10011111
             },
             3 => {
-                (self.frequency & 0xFF) as u8
+                0xFF
             },
             4 => {
-                ((self.stop_flag as u8) << 6) + (self.frequency >> 8) as u8
+                ((self.stop_flag as u8) << 6) | 0b10111111
             },
             0x30..=0x3F => {
                 self.wave_pattern_ram[address as usize - 0x30]
             },
-            _ => 0
+            _ => 0xFF
         };
 
         Ok(data)
@@ -504,7 +504,7 @@ impl Ch4 {
     pub fn read(&self, address: u16) -> Result<u8> {
         let data = match address {
             1 => {
-                self.length
+                0xFF
             },
             2 => {
                 (self.env_initial_volume << 4) + ((self.env_up as u8) << 3) + (self.env_period)
@@ -513,9 +513,9 @@ impl Ch4 {
                 (self.shift_amount << 4) + ((self.counter_width as u8) << 3) + self.divisor_code
             },
             4 => {
-                (self.stop_flag as u8) << 6
+                ((self.stop_flag as u8) << 6) | 0b10111111
             },
-            _ => 0
+            _ => 0xFF
         };
 
         Ok(data)
@@ -561,7 +561,7 @@ impl Ch4 {
     }
 
     fn trigger(&mut self) {
-        self.channel_on = true;
+        self.channel_on = self.dac_enable();
         if self.length_timer == 0 {
             self.length_timer = 64
         }
@@ -638,6 +638,8 @@ pub struct SoundControl {
     left_volume: u8,
     right_volume: u8,
     select_output: u8,
+    vin_left: bool,
+    vin_right: bool,
     sound_on: bool
 }
 
@@ -665,7 +667,7 @@ impl Sound {
             current_cycle: Default::default(),
             prev_div: Default::default(),
             sound_control: Default::default(), 
-            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 50000]),
+            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 100000]),
             sample_rate,
         };
 
@@ -679,23 +681,30 @@ impl Sound {
             0xFF1A..=0xFF1E => self.ch3.read(address - 0xFF1A),
             0xFF1F..=0xFF23 => self.ch4.read(address - 0xFF1F),
             0xFF24 => {
-                let ret = (self.sound_control.left_volume << 4) + (self.sound_control.right_volume);
+                let ret = ((self.sound_control.vin_left as u8) << 7) | 
+                            (self.sound_control.left_volume << 4) |
+                            ((self.sound_control.vin_right as u8) << 3) | 
+                            (self.sound_control.right_volume);
+                println!("nr50");
                 Ok(ret)
             },
             0xFF25 => {
+                println!("nr51");
                 Ok(self.sound_control.select_output)
             },
             0xFF26 => {
-                let ret = ((self.sound_control.sound_on as u8) << 7) + 
+                let mut ret = ((self.sound_control.sound_on as u8) << 7) + 
                     ((self.ch4.channel_on as u8) << 3) + 
                     ((self.ch3.channel_on as u8) << 2) +
                     ((self.ch2.channel_on as u8) << 1) +
                     ((self.ch1.channel_on as u8) << 0);
 
+                ret |= 0b01110000;
+                println!("nr52");
                 Ok(ret)
             }
             0xFF30..=0xFF3F => self.ch3.read(address - 0xFF00),
-            _ => Ok(0)
+            _ => Ok(0xFF)
         };
 
         data
@@ -708,7 +717,9 @@ impl Sound {
             0xFF1A..=0xFF1E => self.ch3.write(address - 0xFF1A, data),
             0xFF1F..=0xFF23 => self.ch4.write(address - 0xFF1F, data),
             0xFF24 => {
-                self.sound_control.left_volume = (data & 0b01110000) >> 4;
+                self.sound_control.vin_left = (data & (1 << 7)) > 0;
+                self.sound_control.vin_right = (data & (1 << 3)) > 0;
+                self.sound_control.left_volume = ((data & 0b01110000) >> 4) & 0b111;
                 self.sound_control.right_volume = data & 0b111;
                 Ok(())
             },
@@ -718,11 +729,33 @@ impl Sound {
             },
             0xFF26 => {
                 self.sound_control.sound_on = (data & (1 << 7)) > 0;
+                if !self.sound_control.sound_on {
+                    self.reset();
+                }
                 Ok(())
             }
             0xFF30..=0xFF3F => self.ch3.write(address - 0xFF00, data),
             _ => Ok(())
         }
+    }
+
+    fn reset(&mut self) {
+        let mut ch3 = Ch3::default();
+        ch3.wave_pattern_ram = self.ch3.wave_pattern_ram;
+        let sound = Self { 
+            ch1: Default::default(), 
+            ch2: Default::default(), 
+            ch3,
+            ch4: Default::default(), 
+            frame_step: Default::default(),
+            current_cycle: Default::default(),
+            prev_div: Default::default(),
+            sound_control: Default::default(), 
+            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 100000]),
+            sample_rate: self.sample_rate,
+        };
+
+        *self = sound
     }
 
     pub fn tick(&mut self, div: u8) {
@@ -761,7 +794,9 @@ impl Sound {
         if self.current_cycle >= output_cycle {
             self.current_cycle = 0;
             let sample = self.mix();
-            self.sound_buffer.push(sample);
+            if !self.sound_buffer.is_full() {
+                self.sound_buffer.push(sample);
+            }
         }
     }
 

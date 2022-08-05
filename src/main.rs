@@ -187,7 +187,7 @@ fn main() {
             Event::MainEventsCleared => {
                 let duration = current_time.elapsed().as_micros();
                 let frame_microsec: u128 = 1_000_000 / 60;
-                if duration >= frame_microsec {
+                if duration >= frame_microsec && cpu.lock().unwrap().sleep {
                     current_time = Instant::now();
                     window.request_redraw();    
                 }
