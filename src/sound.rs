@@ -7,7 +7,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 pub struct Ch1 {
     sweep_period: u8,
     sweep_timer: u8,
-    sweep_up: bool,
+    sweep_down: bool,
     sweep_shift: u8,
     sweep_flag: bool,
     shadow_frequency: u16,
@@ -30,7 +30,7 @@ impl Ch1 {
     pub fn read(&self, address: u16) -> Result<u8> {
         let data = match address {
             0 => {
-                ((self.sweep_period << 4) + ((!self.sweep_up as u8) << 3) + self.sweep_shift) | 0b10000000
+                ((self.sweep_period << 4) + ((self.sweep_down as u8) << 3) + self.sweep_shift) | 0b10000000
             },
             1 => {
                 (self.duty_pattern << 6) | 0b111111
@@ -54,7 +54,7 @@ impl Ch1 {
         match address {
             0 => {
                 self.sweep_period = (data >> 4) & 0b111;
-                self.sweep_up = (data & (1 << 3)) == 0;
+                self.sweep_down = (data & (1 << 3)) > 0;
                 self.sweep_shift = data & 0b111;
             },
             1 => {
@@ -179,7 +179,7 @@ impl Ch1 {
 
     fn calc_new_frequency(&self) -> u16 {
         let offset = self.shadow_frequency >> self.sweep_shift;
-        if self.sweep_up {
+        if !self.sweep_down {
             return self.shadow_frequency.wrapping_add(offset)
         }
 
@@ -711,38 +711,53 @@ impl Sound {
     }
 
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
-        match address {
-            0xFF10..=0xFF14 => self.ch1.write(address - 0xFF10, data),
-            0xFF15..=0xFF19 => self.ch2.write(address - 0xFF15, data),
-            0xFF1A..=0xFF1E => self.ch3.write(address - 0xFF1A, data),
-            0xFF1F..=0xFF23 => self.ch4.write(address - 0xFF1F, data),
-            0xFF24 => {
-                self.sound_control.vin_left = (data & (1 << 7)) > 0;
-                self.sound_control.vin_right = (data & (1 << 3)) > 0;
-                self.sound_control.left_volume = ((data & 0b01110000) >> 4) & 0b111;
-                self.sound_control.right_volume = data & 0b111;
-                Ok(())
-            },
-            0xFF25 => {
-                self.sound_control.select_output = data;
-                Ok(())
-            },
-            0xFF26 => {
-                self.sound_control.sound_on = (data & (1 << 7)) > 0;
-                if !self.sound_control.sound_on {
-                    self.reset();
+        if self.sound_control.sound_on {
+            match address {
+                0xFF10..=0xFF14 => self.ch1.write(address - 0xFF10, data),
+                0xFF15..=0xFF19 => self.ch2.write(address - 0xFF15, data),
+                0xFF1A..=0xFF1E => self.ch3.write(address - 0xFF1A, data),
+                0xFF1F..=0xFF23 => self.ch4.write(address - 0xFF1F, data),
+                0xFF24 => {
+                    self.sound_control.vin_left = (data & (1 << 7)) > 0;
+                    self.sound_control.vin_right = (data & (1 << 3)) > 0;
+                    self.sound_control.left_volume = ((data & 0b01110000) >> 4) & 0b111;
+                    self.sound_control.right_volume = data & 0b111;
+                    Ok(())
+                },
+                0xFF25 => {
+                    self.sound_control.select_output = data;
+                    Ok(())
+                },
+                0xFF26 => {
+                    self.sound_control.sound_on = (data & (1 << 7)) > 0;
+                    if !self.sound_control.sound_on {
+                        self.reset();
+                    }
+                    Ok(())
                 }
-                Ok(())
+                0xFF30..=0xFF3F => self.ch3.write(address - 0xFF00, data),
+                _ => Ok(())
             }
-            0xFF30..=0xFF3F => self.ch3.write(address - 0xFF00, data),
-            _ => Ok(())
+        }
+        else {
+            match address {
+                0xFF26 => {
+                    self.sound_control.sound_on = (data & (1 << 7)) > 0;
+                    if !self.sound_control.sound_on {
+                        self.reset();
+                    }
+                    Ok(())
+                }
+                0xFF30..=0xFF3F => self.ch3.write(address - 0xFF00, data),
+                _ => Ok(())
+            }
         }
     }
 
     fn reset(&mut self) {
         let mut ch3 = Ch3::default();
         ch3.wave_pattern_ram = self.ch3.wave_pattern_ram;
-        let sound = Self { 
+        let sound = Sound { 
             ch1: Default::default(), 
             ch2: Default::default(), 
             ch3,
