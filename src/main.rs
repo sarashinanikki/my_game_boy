@@ -78,20 +78,11 @@ fn main() {
     let cpu_sound = cpu.clone();
     let channels = config.channels() as usize;
     let err_fn = |err: StreamError| eprintln!("an error occured in sound stream: {}", err);
-    let stream = device.build_output_stream(
-        &config.into(),
-        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            for frame in data.chunks_mut(channels) {
-                let value: [f32; 2] = match cpu_sound.lock().unwrap().bus.sound.get_sound_buffer().pop() {
-                    Some(res) => res.map(|e| cpal::Sample::from::<f32>(&e)),
-                    None => Stereo::EQUILIBRIUM.map(|e| cpal::Sample::from::<f32>(&e)),
-                };
-        
-                frame.copy_from_slice(&value);
-            }
-        },
-        err_fn
-    ).unwrap();
+    let stream = match config.sample_format() {
+        SampleFormat::F32 => device.build_output_stream(&config.into(), move |data: &mut [f32], _: &cpal::OutputCallbackInfo| { write_data(data, channels, &cpu_sound) }, err_fn),
+        SampleFormat::I16 => device.build_output_stream(&config.into(), move |data: &mut [i16], _: &cpal::OutputCallbackInfo| { write_data(data, channels, &cpu_sound) }, err_fn),
+        SampleFormat::U16 => device.build_output_stream(&config.into(), move |data: &mut [u16], _: &cpal::OutputCallbackInfo| { write_data(data, channels, &cpu_sound) }, err_fn)
+    }.unwrap();
 
     stream.play().unwrap();
 
@@ -203,4 +194,17 @@ fn main() {
             _ => {}
         }
     })
+}
+
+fn write_data<T>(output: &mut [T], channels: usize, cpu_sound: &Arc<Mutex<cpu::Cpu>>) 
+where T: cpal::Sample
+{
+    for frame in output.chunks_mut(channels) {
+        let value: [T; 2] = match cpu_sound.lock().unwrap().bus.sound.get_sound_buffer().pop() {
+            Some(res) => res.map(|e| cpal::Sample::from::<f32>(&e)),
+            None => Stereo::EQUILIBRIUM.map(|e| cpal::Sample::from::<f32>(&e)),
+        };
+
+        frame.copy_from_slice(&value);
+    }
 }

@@ -13,6 +13,7 @@ pub struct Ch1 {
     shadow_frequency: u16,
     length: u8,
     length_timer: u8,
+    length_ticking: bool,
     stop_flag: bool,
     duty_pattern: u8,
     env_initial_volume: u8,
@@ -60,6 +61,7 @@ impl Ch1 {
             1 => {
                 self.duty_pattern = data >> 6;
                 self.length = data & 63;
+                self.length_timer = 64 - self.length;
             },
             2 => {
                 self.env_initial_volume = data >> 4;
@@ -74,7 +76,11 @@ impl Ch1 {
                     self.trigger();
                 }
 
+                let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
+                if !prev_stop_flag && self.stop_flag && self.length_ticking {
+                    self.length();
+                }
                 let freq_upper_bit = (data & 0b111) as u16;
                 self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
@@ -187,26 +193,31 @@ impl Ch1 {
     }
 
     fn length(&mut self) {
+        if !self.stop_flag {
+            return;
+        }
+
         self.length_timer = self.length_timer.wrapping_sub(1);
+        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
     }
 
-    fn output(&self) -> f32 {
+    fn output(&self) -> i16 {
         if !self.channel_on {
-            return 0.0;
+            return 0;
         }
 
         let duty_wave: [[u8; 8]; 4] = [
             [0, 0, 0, 0, 0, 0, 0, 1],
-            [0, 0, 0, 0, 0, 0, 1, 1],
-            [0, 0, 0, 0, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1, 1, 0, 0],
+            [1, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 1, 1, 1],
+            [0, 1, 1, 1, 1, 1, 1, 0],
         ];
 
         let dac_input = duty_wave[self.duty_pattern as usize][self.duty_position as usize] * self.volume;
-        let dac_output = (dac_input as f32 / 7.5) - 1.0;
+        let dac_output = dac_input as i16;
         return dac_output
     }
 }
@@ -215,6 +226,7 @@ impl Ch1 {
 pub struct Ch2 {
     length: u8,
     length_timer: u8,
+    length_ticking: bool,
     stop_flag: bool,
     duty_pattern: u8,
     env_initial_volume: u8,
@@ -254,6 +266,7 @@ impl Ch2 {
             1 => {
                 self.duty_pattern = (data >> 6) & 0b11;
                 self.length = data & 63;
+                self.length_timer = 64 - self.length;
             },
             2 => {
                 self.env_initial_volume = data >> 4;
@@ -268,7 +281,11 @@ impl Ch2 {
                     self.trigger();
                 }
 
+                let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
+                if !prev_stop_flag && self.stop_flag && self.length_ticking {
+                    self.length();
+                }
                 let freq_upper_bit = (data & 0b111) as u16;
                 self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
@@ -332,14 +349,15 @@ impl Ch2 {
         }
 
         self.length_timer = self.length_timer.wrapping_sub(1);
+        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
     }
 
-    fn output(&self) -> f32 {
+    fn output(&self) -> i16 {
         if !self.channel_on {
-            return 0.0;
+            return 0;
         }
 
         let duty_wave: [[u8; 8]; 4] = [
@@ -350,7 +368,7 @@ impl Ch2 {
         ];
 
         let dac_input = duty_wave[self.duty_pattern as usize][self.duty_position as usize] * self.volume;
-        let dac_output = (dac_input as f32 / 7.5) - 1.0;
+        let dac_output = dac_input as i16;
         return dac_output
     }
 }
@@ -360,6 +378,7 @@ pub struct Ch3 {
     channel_on: bool,
     length: u8,
     length_timer: u16,
+    length_ticking: bool,
     volume: u8,
     frequency: u16,
     frequency_timer: u16,
@@ -403,6 +422,7 @@ impl Ch3 {
             },
             1 => {
                 self.length = data;
+                self.length_timer = 256 - self.length as u16;
             },
             2 => {
                 self.volume = (data >> 5) & 0b11;
@@ -415,7 +435,11 @@ impl Ch3 {
                     self.trigger();
                 }
 
+                let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
+                if !prev_stop_flag && self.stop_flag && self.length_ticking {
+                    self.length();
+                }
                 let freq_upper_bit = (data & 0b111) as u16;
                 self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
@@ -457,24 +481,25 @@ impl Ch3 {
         }
 
         self.length_timer = self.length_timer.wrapping_sub(1);
+        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
     }
 
-    fn output(&self) -> f32 {
-        let raw_sample = if self.position % 2 == 0 {
-            self.wave_pattern_ram[self.position as usize / 2] >> 4
+    fn output(&self) -> i16 {
+        let raw_sample: i16 = if self.position % 2 == 0 {
+            (self.wave_pattern_ram[self.position as usize / 2] >> 4) as i16
         }
         else {
-            self.wave_pattern_ram[self.position as usize / 2] % 0x0F
+            (self.wave_pattern_ram[self.position as usize / 2] % 0x0F) as i16
         };
 
-        let dac_output: f32 = if self.volume == 0 {
-            0.0
+        let dac_output: i16 = if self.volume == 0 {
+            0
         }
         else {
-            (raw_sample >> (self.volume - 1)) as f32
+            ((raw_sample << 2) >> (self.volume)) as i16
         };
 
         dac_output
@@ -485,6 +510,7 @@ impl Ch3 {
 pub struct Ch4 {
     length: u8,
     length_timer: u8,
+    length_ticking: bool,
     stop_flag: bool,
     env_initial_volume: u8,
     env_up: bool,
@@ -525,6 +551,7 @@ impl Ch4 {
         match address {
             1 => {
                 self.length = data & 63;
+                self.length_timer = 64 - self.length;
             },
             2 => {
                 self.env_initial_volume = data >> 4;
@@ -548,7 +575,11 @@ impl Ch4 {
                     self.trigger();
                 }
 
+                let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
+                if !prev_stop_flag && self.stop_flag && self.length_ticking {
+                    self.length();
+                }
             },
             _ => {}
         }
@@ -617,18 +648,22 @@ impl Ch4 {
         }
 
         self.length_timer = self.length_timer.wrapping_sub(1);
+        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
     }
 
-    fn output(&self) -> f32 {
+    fn output(&self) -> i16 {
         if !self.channel_on {
-            return 0.0
+            return 0;
         }
 
-        let dac_input = ((self.lfsr & 0x01) ^ 0x01) as u8 * self.volume;
-        let dac_output = (dac_input as f32 / 7.5) - 1.0;
+        let dac_input = ((self.lfsr & 0x01) ^ 0x01) as i16;
+        let dac_output = match dac_input {
+            0 => (self.volume as i16) * -1,
+            _ => self.volume as i16
+        };
         return dac_output
     }
 }
@@ -650,7 +685,7 @@ pub struct Sound {
     ch4: Ch4,
     current_cycle: usize,
     frame_step: u8,
-    prev_div: u8,
+    prev_bit: bool,
     sound_control: SoundControl,
     sound_buffer: ring_buffer::Bounded<Vec<Stereo<f32>>>,
     sample_rate: usize,
@@ -663,9 +698,9 @@ impl Sound {
             ch2: Default::default(), 
             ch3: Default::default(), 
             ch4: Default::default(), 
-            frame_step: Default::default(),
+            frame_step: 8,
             current_cycle: Default::default(),
-            prev_div: Default::default(),
+            prev_bit: Default::default(),
             sound_control: Default::default(), 
             sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 100000]),
             sample_rate,
@@ -685,11 +720,9 @@ impl Sound {
                             (self.sound_control.left_volume << 4) |
                             ((self.sound_control.vin_right as u8) << 3) | 
                             (self.sound_control.right_volume);
-                println!("nr50");
                 Ok(ret)
             },
             0xFF25 => {
-                println!("nr51");
                 Ok(self.sound_control.select_output)
             },
             0xFF26 => {
@@ -700,7 +733,6 @@ impl Sound {
                     ((self.ch1.channel_on as u8) << 0);
 
                 ret |= 0b01110000;
-                println!("nr52");
                 Ok(ret)
             }
             0xFF30..=0xFF3F => self.ch3.read(address - 0xFF00),
@@ -762,9 +794,9 @@ impl Sound {
             ch2: Default::default(), 
             ch3,
             ch4: Default::default(), 
-            frame_step: Default::default(),
+            frame_step: 8,
             current_cycle: Default::default(),
-            prev_div: Default::default(),
+            prev_bit: self.prev_bit,
             sound_control: Default::default(), 
             sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 100000]),
             sample_rate: self.sample_rate,
@@ -784,26 +816,40 @@ impl Sound {
         self.ch3.frequency_tick();
         self.ch4.frequency_tick();
 
-        let prev_bit = (self.prev_div & (1 << 5)) > 0;
         let cur_bit = (div & (1 << 5)) > 0;
-        self.prev_div = div;
 
-        if !prev_bit && cur_bit {
-            self.frame_step = self.frame_step.wrapping_add(1);
+        if (self.prev_bit && !cur_bit) || self.frame_step == 8 {
+            if self.frame_step != 8 {
+                self.frame_step = self.frame_step.wrapping_add(1);
+            }
+
             self.frame_step %= 8;
 
             match self.frame_step {
                 0 => self.length(),
-                1 | 3 | 5 => {},
+                1 | 3 | 5 => {
+                    self.ch1.length_ticking = false;
+                    self.ch2.length_ticking = false;
+                    self.ch3.length_ticking = false;
+                    self.ch4.length_ticking = false;
+                },
                 2 | 6 => {
                     self.sweep();
                     self.length();
                 },
                 4 => self.length(),
-                7 => self.envelope(),
+                7 => {
+                    self.envelope();
+                    self.ch1.length_ticking = false;
+                    self.ch2.length_ticking = false;
+                    self.ch3.length_ticking = false;
+                    self.ch4.length_ticking = false;
+                },
                 _ => {}
             }
         }
+
+        self.prev_bit = cur_bit;
 
         let output_cycle = 4194304 / self.sample_rate;
         if self.current_cycle >= output_cycle {
@@ -827,6 +873,10 @@ impl Sound {
     }
 
     fn length(&mut self) {
+        self.ch1.length_ticking = true;
+        self.ch2.length_ticking = true;
+        self.ch3.length_ticking = true;
+        self.ch4.length_ticking = true;
         self.ch1.length();
         self.ch2.length();
         self.ch3.length();
@@ -837,33 +887,35 @@ impl Sound {
         let mut left = 0.0;
         let mut right = 0.0;
 
+        let left_volume = (self.sound_control.left_volume as f32 / 7.0) * (1.0 / 15.0) * 0.25;
+        let right_volume = (self.sound_control.right_volume as f32 / 7.0) * (1.0 / 15.0) * 0.25;
+
         // right
         for i in 0..4 {
             if (self.sound_control.select_output & (1 << i)) > 0 {
                 match i {
-                    0 => right += self.ch1.output(),
-                    1 => right += self.ch2.output(),
-                    2 => right += self.ch3.output(),
-                    3 => right += self.ch4.output(),
+                    0 => right += (self.ch1.output() as f32) * right_volume,
+                    1 => right += (self.ch2.output() as f32) * right_volume,
+                    2 => right += (self.ch3.output() as f32 / 4.0) * right_volume,
+                    3 => right += (self.ch4.output() as f32) * right_volume,
                     _ => {}
                 }
             }
         }
 
         // left
-        for i in 0..4 {
-            if (self.sound_control.select_output & (1 << (i+4))) > 0 {
+        for i in 4..8 {
+            if (self.sound_control.select_output & (1 << i)) > 0 {
                 match i {
-                    0 => left += self.ch1.output(),
-                    1 => left += self.ch2.output(),
-                    2 => left += self.ch3.output(),
-                    3 => left += self.ch4.output(),
+                    4 => left += (self.ch1.output() as f32) * left_volume,
+                    5 => left += (self.ch2.output() as f32) * left_volume,
+                    6 => left += (self.ch3.output() as f32 / 4.0) * left_volume,
+                    7 => left += (self.ch4.output() as f32) * left_volume,
                     _ => {}
                 }
             }
         }
 
-        // println!("mix: {}, {}", left, right);
         return [left, right]
     }
 
