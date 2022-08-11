@@ -8,6 +8,7 @@ pub struct Ch1 {
     sweep_period: u8,
     sweep_timer: u8,
     sweep_down: bool,
+    calc_sweep_in_neg: bool,
     sweep_shift: u8,
     sweep_flag: bool,
     shadow_frequency: u16,
@@ -54,9 +55,15 @@ impl Ch1 {
     pub fn write(&mut self, address: u16, data: u8) -> Result<()> {
         match address {
             0 => {
+                let prev_sweep_down = self.sweep_down;
                 self.sweep_period = (data >> 4) & 0b111;
                 self.sweep_down = (data & (1 << 3)) > 0;
                 self.sweep_shift = data & 0b111;
+
+                if prev_sweep_down && self.calc_sweep_in_neg && !self.sweep_down {
+                    self.channel_on = false;
+                    self.calc_sweep_in_neg = false;
+                }
             },
             1 => {
                 self.duty_pattern = data >> 6;
@@ -117,6 +124,7 @@ impl Ch1 {
             self.sweep_period
         };
 
+        self.calc_sweep_in_neg = false;
         self.sweep_flag = self.sweep_period > 0 || self.sweep_shift > 0;
         self.shadow_frequency = self.frequency;
         if self.sweep_shift > 0 {
@@ -174,7 +182,6 @@ impl Ch1 {
             };
 
             if self.sweep_flag && self.sweep_period > 0 {
-                self.shadow_frequency = self.frequency;
                 let new_frequency = self.calc_new_frequency();
 
                 if new_frequency <= 2047 && self.sweep_shift > 0 {
@@ -189,12 +196,13 @@ impl Ch1 {
         }
     }
 
-    fn calc_new_frequency(&self) -> u16 {
+    fn calc_new_frequency(&mut self) -> u16 {
         let offset = self.shadow_frequency >> self.sweep_shift;
         if !self.sweep_down {
             return self.shadow_frequency.wrapping_add(offset)
         }
 
+        self.calc_sweep_in_neg = true;
         return self.shadow_frequency.wrapping_sub(offset)
     }
 
