@@ -70,9 +70,12 @@ impl Ch1 {
                 self.channel_on = self.channel_on & self.dac_enable();
             },
             3 => {
-                self.frequency = self.frequency - (self.frequency & 0xFF) + data as u16;
+                self.frequency = (self.frequency - (self.frequency & 0xFF)) + data as u16;
             },
             4 => {
+                let freq_upper_bit = (data & 0b111) as u16;
+                self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
+
                 let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
 
@@ -83,9 +86,6 @@ impl Ch1 {
                 if (data & (1 << 7)) > 0 {
                     self.trigger();
                 }
-
-                let freq_upper_bit = (data & 0b111) as u16;
-                self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
             _ => {}
         }
@@ -118,13 +118,12 @@ impl Ch1 {
         };
 
         self.sweep_flag = self.sweep_period > 0 || self.sweep_shift > 0;
+        self.shadow_frequency = self.frequency;
         if self.sweep_shift > 0 {
             if self.calc_new_frequency() > 2047 {
                 self.channel_on = false;
             }
         }
-
-        self.channel_on = self.dac_enable();
     }
 
     fn frequency_tick(&mut self) {
@@ -175,6 +174,7 @@ impl Ch1 {
             };
 
             if self.sweep_flag && self.sweep_period > 0 {
+                self.shadow_frequency = self.frequency;
                 let new_frequency = self.calc_new_frequency();
 
                 if new_frequency <= 2047 && self.sweep_shift > 0 {
@@ -283,6 +283,8 @@ impl Ch2 {
                 self.frequency = self.frequency - (self.frequency & 0xFF) + data as u16;
             },
             4 => {
+                let freq_upper_bit = (data & 0b111) as u16;
+                self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
                 let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
                 
@@ -293,9 +295,6 @@ impl Ch2 {
                 if (data & (1 << 7)) > 0 {
                     self.trigger();
                 }
-
-                let freq_upper_bit = (data & 0b111) as u16;
-                self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
             _ => {}
         }
@@ -442,6 +441,8 @@ impl Ch3 {
                 self.frequency = self.frequency - (self.frequency & 0xFF) + data as u16;
             },
             4 => {
+                let freq_upper_bit = (data & 0b111) as u16;
+                self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
                 let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
 
@@ -452,9 +453,6 @@ impl Ch3 {
                 if (data & (1 << 7)) > 0 {
                     self.trigger();
                 }
-
-                let freq_upper_bit = (data & 0b111) as u16;
-                self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
             0x30..=0x3F => {
                 self.wave_pattern_ram[address as usize - 0x30] = data;
