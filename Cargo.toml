@@ -11,3 +11,5 @@ winit = "0.26.1"
 winit_input_helper = "0.12.0"
 pixels = "0.9.0"
 dotenvy = "0.15.1"
+cpal = "0.12"
+dasp = { version = "0.11", features = ["all"] }

@@ -2,16 +2,17 @@ use std::{io::BufReader, fs::File};
 
 use anyhow::{Result, bail};
 
-use crate::{mbc::{Mbc, NoMbc, Mbc1, Mbc5}, ppu::Ppu, joypad::Joypad, timer::Timer, rom::Rom};
+use crate::{mbc::{Mbc, NoMbc, Mbc1, Mbc5}, ppu::Ppu, joypad::Joypad, timer::Timer, rom::Rom, sound::Sound};
 
 pub struct Bus {
     pub ram: [u8; 0x8192],
     pub hram: [u8; 0x127],
     pub ppu: Ppu,
-    pub mbc: Box<dyn Mbc>,
+    pub mbc: Box<dyn Mbc + Send>,
     pub dma: u8,
     pub timer: Timer,
     pub joypad: Joypad,
+    pub sound: Sound,
     // interrupt enable
     pub ie_flag: u8,
     // interrupt flag
@@ -19,13 +20,13 @@ pub struct Bus {
 }
 
 impl Bus {
-    pub fn new(reader: &mut BufReader<File>) -> Self {
+    pub fn new(reader: &mut BufReader<File>, sample_rate: usize) -> Self {
         let rom = Rom::new(reader).unwrap();
         let rom_type = rom.cartridge_type;
         let rom_size = rom.rom_size;
         let ram_size = rom.ram_size;
 
-        let mbc: Box<dyn Mbc> = match rom_type {
+        let mbc: Box<dyn Mbc + Send> = match rom_type {
             0x00 => {
                 Box::new(
                     NoMbc {
@@ -65,6 +66,7 @@ impl Bus {
         };
 
         let ppu = Ppu::new();
+        let sound = Sound::new(sample_rate).unwrap();
 
         Self { 
             ram: [0; 0x8192],
@@ -74,6 +76,7 @@ impl Bus {
             timer: Default::default(),
             dma: Default::default(),
             joypad: Default::default(),
+            sound,
             ie_flag: Default::default(),
             int_flag: Default::default()
         }
@@ -95,7 +98,7 @@ impl Bus {
             0xFF06 => Ok(self.timer.read_tma()),
             0xFF07 => Ok(self.timer.read_tac()),
             0xFF0F => Ok(self.int_flag),
-            0xFF10..=0xFF3F => Ok(0),
+            0xFF10..=0xFF3F => self.sound.read(address),
             0xFF40 => self.ppu.lcd_control_read(),
             0xFF41 => self.ppu.read_lcd_stat(),
             0xFF42 => self.ppu.scy_read(),
@@ -110,7 +113,7 @@ impl Bus {
             0xFF4C..=0xFF4E => Ok(0),
             0xFF80..=0xFFFE => Ok(self.hram[(address-0xFF80) as usize]),
             0xFFFF => Ok(self.ie_flag),
-            _ => Ok(0)
+            _ => Ok(0xFF)
         }
     }
 
@@ -162,7 +165,7 @@ impl Bus {
                 self.int_flag = data;
                 Ok(())
             },
-            0xFF10..=0xFF3F => Ok(()),
+            0xFF10..=0xFF3F => self.sound.write(address, data),
             0xFF40 => self.ppu.lcd_control_write(data),
             0xFF41 => self.ppu.write_lcd_stat(data),
             0xFF42 => self.ppu.scy_write(data),
