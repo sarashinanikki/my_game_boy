@@ -723,7 +723,7 @@ impl Sound {
             ch2: Default::default(), 
             ch3: Default::default(), 
             ch4: Default::default(), 
-            frame_step: 8,
+            frame_step: 7,
             current_cycle: Default::default(),
             prev_bit: Default::default(),
             sound_control: Default::default(), 
@@ -786,9 +786,13 @@ impl Sound {
                     Ok(())
                 },
                 0xFF26 => {
+                    let prev_sound_on = self.sound_control.sound_on;
                     self.sound_control.sound_on = (data & (1 << 7)) > 0;
-                    if !self.sound_control.sound_on {
+                    if prev_sound_on && !self.sound_control.sound_on {
                         self.reset();
+                    }
+                    else if !prev_sound_on && self.sound_control.sound_on {
+                        self.frame_step = 7;
                     }
                     Ok(())
                 }
@@ -819,7 +823,7 @@ impl Sound {
             ch2: Default::default(), 
             ch3,
             ch4: Default::default(), 
-            frame_step: 8,
+            frame_step: 7,
             current_cycle: Default::default(),
             prev_bit: self.prev_bit,
             sound_control: Default::default(), 
@@ -843,11 +847,8 @@ impl Sound {
 
         let cur_bit = (div & (1 << 4)) > 0;
 
-        if (self.prev_bit && !cur_bit) || self.frame_step == 8 {
-            if self.frame_step != 8 {
-                self.frame_step = self.frame_step.wrapping_add(1);
-            }
-
+        if self.prev_bit && !cur_bit{
+            self.frame_step = self.frame_step.wrapping_add(1);
             self.frame_step %= 8;
 
             match self.frame_step {
