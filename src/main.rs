@@ -31,7 +31,7 @@ fn main() {
     dotenv().ok();
     let args: Vec<String> = env::args().collect();
     let rom_name = &args[1];
-    let base_path = env::var("BASE_PATH").expect("BASE_PATH must be set!");
+    let base_path = env::var("BASE_PATH").unwrap_or("".to_string());
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -140,13 +140,13 @@ fn main() {
                             ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::A)
                         }
                     },
-                    VirtualKeyCode::G => {
+                    VirtualKeyCode::Space => {
                         match button_state {
                             ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Select),
                             ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Select)
                         }
                     },
-                    VirtualKeyCode::H => {
+                    VirtualKeyCode::Return => {
                         match button_state {
                             ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Start),
                             ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Start)
