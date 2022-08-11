@@ -67,20 +67,23 @@ impl Ch1 {
                 self.env_initial_volume = data >> 4;
                 self.env_up = (data & (1 << 3)) > 0;
                 self.env_period = data & 0b111;
+                self.channel_on = self.channel_on & self.dac_enable();
             },
             3 => {
                 self.frequency = self.frequency - (self.frequency & 0xFF) + data as u16;
             },
             4 => {
+                let prev_stop_flag = self.stop_flag;
+                self.stop_flag = (data & (1 << 6)) > 0;
+
+                if !prev_stop_flag && self.stop_flag && self.length_ticking {
+                    self.length();
+                }
+                
                 if (data & (1 << 7)) > 0 {
                     self.trigger();
                 }
 
-                let prev_stop_flag = self.stop_flag;
-                self.stop_flag = (data & (1 << 6)) > 0;
-                if !prev_stop_flag && self.stop_flag && self.length_ticking {
-                    self.length();
-                }
                 let freq_upper_bit = (data & 0b111) as u16;
                 self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
@@ -97,7 +100,10 @@ impl Ch1 {
     fn trigger(&mut self) {
         self.channel_on = self.dac_enable();
         if self.length_timer == 0 {
-            self.length_timer = 64
+            self.length_timer = 64;
+            if self.stop_flag && self.length_ticking {
+                self.length();
+            }
         }
         self.frequency_timer = (2048 - self.frequency) * 4;
         self.env_timer = self.env_period;
@@ -193,12 +199,11 @@ impl Ch1 {
     }
 
     fn length(&mut self) {
-        if !self.stop_flag {
+        if !self.stop_flag || self.length_timer == 0 {
             return;
         }
 
         self.length_timer = self.length_timer.wrapping_sub(1);
-        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
@@ -272,20 +277,23 @@ impl Ch2 {
                 self.env_initial_volume = data >> 4;
                 self.env_up = (data & (1 << 3)) > 0;
                 self.env_period = data & 0b111;
+                self.channel_on = self.channel_on & self.dac_enable();
             },
             3 => {
                 self.frequency = self.frequency - (self.frequency & 0xFF) + data as u16;
             },
             4 => {
+                let prev_stop_flag = self.stop_flag;
+                self.stop_flag = (data & (1 << 6)) > 0;
+                
+                if !prev_stop_flag && self.stop_flag && self.length_ticking {
+                    self.length();
+                }
+
                 if (data & (1 << 7)) > 0 {
                     self.trigger();
                 }
 
-                let prev_stop_flag = self.stop_flag;
-                self.stop_flag = (data & (1 << 6)) > 0;
-                if !prev_stop_flag && self.stop_flag && self.length_ticking {
-                    self.length();
-                }
                 let freq_upper_bit = (data & 0b111) as u16;
                 self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
@@ -302,7 +310,10 @@ impl Ch2 {
     fn trigger(&mut self) {
         self.channel_on = self.dac_enable();
         if self.length_timer == 0 {
-            self.length_timer = 64
+            self.length_timer = 64;
+            if self.stop_flag && self.length_ticking {
+                self.length();
+            }
         }
         self.frequency_timer = (2048 - self.frequency) * 4;
         self.env_timer = self.env_period;
@@ -344,12 +355,11 @@ impl Ch2 {
     }
 
     fn length(&mut self) {
-        if !self.stop_flag {
+        if !self.stop_flag || self.length_timer == 0 {
             return;
         }
 
         self.length_timer = self.length_timer.wrapping_sub(1);
-        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
@@ -419,6 +429,7 @@ impl Ch3 {
         match address {
             0 => {
                 self.enable = (data & (1 << 7)) > 0;
+                self.channel_on = self.channel_on & self.enable;
             },
             1 => {
                 self.length = data;
@@ -431,15 +442,17 @@ impl Ch3 {
                 self.frequency = self.frequency - (self.frequency & 0xFF) + data as u16;
             },
             4 => {
+                let prev_stop_flag = self.stop_flag;
+                self.stop_flag = (data & (1 << 6)) > 0;
+
+                if !prev_stop_flag && self.stop_flag && self.length_ticking {
+                    self.length();
+                }
+
                 if (data & (1 << 7)) > 0 {
                     self.trigger();
                 }
 
-                let prev_stop_flag = self.stop_flag;
-                self.stop_flag = (data & (1 << 6)) > 0;
-                if !prev_stop_flag && self.stop_flag && self.length_ticking {
-                    self.length();
-                }
                 let freq_upper_bit = (data & 0b111) as u16;
                 self.frequency = (self.frequency & 0xFF) + (freq_upper_bit << 8);
             },
@@ -459,7 +472,10 @@ impl Ch3 {
     fn trigger(&mut self) {
         self.channel_on = self.dac_enable();
         if self.length_timer == 0 {
-            self.length_timer = 256
+            self.length_timer = 256;
+            if self.stop_flag && self.length_ticking {
+                self.length();
+            }
         }
         self.frequency_timer = (2048 - self.frequency) * 2;
         self.position = 0;
@@ -476,12 +492,11 @@ impl Ch3 {
     }
 
     fn length(&mut self) {
-        if !self.stop_flag {
+        if !self.stop_flag || self.length_timer == 0 {
             return;
         }
 
         self.length_timer = self.length_timer.wrapping_sub(1);
-        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
@@ -557,6 +572,7 @@ impl Ch4 {
                 self.env_initial_volume = data >> 4;
                 self.env_up = (data & (1 << 3)) > 0;
                 self.env_period = data & 0b111;
+                self.channel_on = self.channel_on & self.dac_enable();
             },
             3 => {
                 self.shift_amount = data >> 4;
@@ -571,14 +587,15 @@ impl Ch4 {
                 }
             },
             4 => {
-                if (data & (1 << 7)) > 0 {
-                    self.trigger();
-                }
-
                 let prev_stop_flag = self.stop_flag;
                 self.stop_flag = (data & (1 << 6)) > 0;
+
                 if !prev_stop_flag && self.stop_flag && self.length_ticking {
                     self.length();
+                }
+                
+                if (data & (1 << 7)) > 0 {
+                    self.trigger();
                 }
             },
             _ => {}
@@ -594,7 +611,10 @@ impl Ch4 {
     fn trigger(&mut self) {
         self.channel_on = self.dac_enable();
         if self.length_timer == 0 {
-            self.length_timer = 64
+            self.length_timer = 64;
+            if self.stop_flag && self.length_ticking {
+                self.length();
+            }
         }
         self.frequency_timer = (self.divisor as u16) << (self.shift_amount as u16);
         self.env_timer = self.env_period;
@@ -643,12 +663,11 @@ impl Ch4 {
     }
 
     fn length(&mut self) {
-        if !self.stop_flag {
+        if !self.stop_flag || self.length_timer == 0 {
             return;
         }
 
         self.length_timer = self.length_timer.wrapping_sub(1);
-        self.length_ticking = false;
         if self.length_timer == 0 {
             self.channel_on = false;
         }
@@ -702,7 +721,7 @@ impl Sound {
             current_cycle: Default::default(),
             prev_bit: Default::default(),
             sound_control: Default::default(), 
-            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 100000]),
+            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 48000]),
             sample_rate,
         };
 
@@ -816,7 +835,7 @@ impl Sound {
         self.ch3.frequency_tick();
         self.ch4.frequency_tick();
 
-        let cur_bit = (div & (1 << 5)) > 0;
+        let cur_bit = (div & (1 << 4)) > 0;
 
         if (self.prev_bit && !cur_bit) || self.frame_step == 8 {
             if self.frame_step != 8 {
