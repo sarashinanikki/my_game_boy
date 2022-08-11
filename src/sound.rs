@@ -516,7 +516,7 @@ impl Ch3 {
             (self.wave_pattern_ram[self.position as usize / 2] % 0x0F) as i16
         };
 
-        let dac_output: i16 = if self.volume == 0 {
+        let dac_output: i16 = if self.volume == 0 || !self.channel_on {
             0
         }
         else {
@@ -727,7 +727,7 @@ impl Sound {
             current_cycle: Default::default(),
             prev_bit: Default::default(),
             sound_control: Default::default(), 
-            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 48000]),
+            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 2000]),
             sample_rate,
         };
 
@@ -827,7 +827,7 @@ impl Sound {
             current_cycle: Default::default(),
             prev_bit: self.prev_bit,
             sound_control: Default::default(), 
-            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 100000]),
+            sound_buffer: self.sound_buffer.clone(),
             sample_rate: self.sample_rate,
         };
 
@@ -879,7 +879,7 @@ impl Sound {
 
         let output_cycle = 4194304 / self.sample_rate;
         if self.current_cycle >= output_cycle {
-            self.current_cycle = 0;
+            self.current_cycle -= output_cycle;
             let sample = self.mix();
             if !self.sound_buffer.is_full() {
                 self.sound_buffer.push(sample);
