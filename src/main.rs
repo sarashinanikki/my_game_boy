@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use dasp::frame::Stereo;
@@ -28,24 +29,91 @@ mod timer;
 mod sound;
 
 fn main() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        console_log::init_with_level(log::Level::Trace).expect("error initializing logger");
+        wasm_bindgen_futures::spawn_local(run());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        pollster::block_on(run());
+    }
+}
+
+async fn run() {
+    /*
     dotenv().ok();
     let args: Vec<String> = env::args().collect();
     let rom_name = &args[1];
     let base_path = env::var("BASE_PATH").unwrap_or("".to_string());
+    */
 
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new()
+    let window_ = WindowBuilder::new()
         .with_title("My Game Boy")
         .with_inner_size(LogicalSize::new(160, 144))
         .with_min_inner_size(LogicalSize::new(160, 144))
         .build(&event_loop)
         .unwrap();
+    
+    let window = Rc::new(window_);
 
-    let window_size = window.inner_size();
-    let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-    let mut pixels = Pixels::new(160, 144, surface_texture).unwrap();
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+        use winit::platform::web::WindowExtWebSys;
 
-    let file_path = base_path + rom_name;
+        // Retrieve current width and height dimensions of browser client window
+        let get_window_size = || {
+            let client_window = web_sys::window().unwrap();
+            LogicalSize::new(
+                client_window.inner_width().unwrap().as_f64().unwrap(),
+                client_window.inner_height().unwrap().as_f64().unwrap(),
+            )
+        };
+
+        let window = Rc::clone(&window);
+
+        // Initialize winit window with current dimensions of browser client
+        window.set_inner_size(get_window_size());
+
+        let client_window = web_sys::window().unwrap();
+
+        // Attach winit canvas to body element
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| doc.body())
+            .and_then(|body| {
+                body.append_child(&web_sys::Element::from(window.canvas()))
+                    .ok()
+            })
+            .expect("couldn't append canvas to document body");
+
+        // Listen for resize event on browser client. Adjust winit window dimensions
+        // on event trigger
+        let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |_e: web_sys::Event| {
+            let size = get_window_size();
+            window.set_inner_size(size)
+        }) as Box<dyn FnMut(_)>);
+        client_window
+            .add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
+    }
+
+    log::debug!("before pixel");
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window.as_ref());
+        Pixels::new_async(160, 144, surface_texture)
+            .await
+            .expect("Pixels error")
+    };
+    log::debug!("after pixel");
+
+    let file_path = "super_mario_land_1.gb";
     let mut reader = BufReader::new(File::open(file_path).unwrap());
 
     let host = cpal::default_host();
