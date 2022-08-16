@@ -77,7 +77,7 @@ async fn web_run() {
     let config = device.default_output_config().unwrap();
     let sample_rate = config.sample_rate().0 as usize;
 
-    let bus = bus::Bus::new(&mut reader, sample_rate);
+    let bus = bus::Bus::new(&mut reader, sample_rate, 4000);
     let cpu = Arc::new(Mutex::new(cpu::Cpu::new(bus)));
 
     let event_loop = EventLoop::new();
@@ -140,7 +140,6 @@ async fn web_run() {
             .expect("Pixels error")
     };
 
-    /*
     // 音声
     let cpu_sound = cpu.clone();
     let channels = config.channels() as usize;
@@ -150,11 +149,10 @@ async fn web_run() {
         SampleFormat::I16 => device.build_output_stream(&config.into(), move |data: &mut [i16], _: &cpal::OutputCallbackInfo| { write_data(data, channels, &cpu_sound) }, err_fn),
         SampleFormat::U16 => device.build_output_stream(&config.into(), move |data: &mut [u16], _: &cpal::OutputCallbackInfo| { write_data(data, channels, &cpu_sound) }, err_fn)
     }.unwrap();
-    */
-    
+    console::log_1(&JsValue::from_f64(channels as f64));
     let cpu_a = cpu.clone();
     wasm_bindgen_futures::spawn_local(cpu_run(cpu_a));
-    // stream.play().unwrap();
+    stream.play().unwrap();
 
     let mut current_time = instant::Instant::now();
     // 画面描画
@@ -294,6 +292,20 @@ fn sleep(ms: i32) -> impl Future {
     wasm_bindgen_futures::JsFuture::from(p)
 }
 
+#[cfg(target_arch = "wasm32")]
+fn write_data<T>(output: &mut [T], channels: usize, cpu_sound: &Arc<Mutex<cpu::Cpu>>) 
+where T: cpal::Sample
+{
+    for frame in output.chunks_mut(channels) {
+        let value: [T; 2] = match cpu_sound.lock().unwrap().bus.sound.get_sound_buffer().pop() {
+            Some(res) => res.map(|e| cpal::Sample::from::<f32>(&e)),
+            None => Stereo::EQUILIBRIUM.map(|e| cpal::Sample::from::<f32>(&e)),
+        };
+
+        frame.copy_from_slice(&value);
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn run() {
     use std::thread::sleep;
@@ -325,7 +337,7 @@ fn run() {
     let config = device.default_output_config().unwrap();
     let sample_rate = config.sample_rate().0 as usize;
 
-    let bus = bus::Bus::new(&mut reader, sample_rate);
+    let bus = bus::Bus::new(&mut reader, sample_rate, 2000);
     let cpu = Arc::new(Mutex::new(cpu::Cpu::new(bus)));
     
     {
@@ -468,6 +480,7 @@ fn run() {
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn write_data<T>(output: &mut [T], channels: usize, cpu_sound: &Arc<Mutex<cpu::Cpu>>) 
 where T: cpal::Sample
 {

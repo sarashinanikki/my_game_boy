@@ -27,7 +27,7 @@ gloo-storage = "0.2.1"
 base64 = "0.13.0"
 js-sys = "0.3.59"
 instant = { version = "0.1.12", features = [ "stdweb" ] }
-cpal = { version = "0.12", features = ["wasm-bindgen"] }
+cpal = { version = "0.13.5", features = ["wasm-bindgen"] }
 console_log = "0.2.0"
 console_error_panic_hook = "0.1.7"
 log = "0.4.17"
