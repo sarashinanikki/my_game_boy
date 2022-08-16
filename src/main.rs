@@ -57,6 +57,7 @@ async fn web_run() {
     use gloo_storage::errors::StorageError;
     use base64::decode;
 
+    // LocalStorageからROMデータを読み出す
     let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
     let buf_vec = match local_storage.get_item("rom").unwrap() {
         Some(res) => {
@@ -69,17 +70,19 @@ async fn web_run() {
     };
 
     let buf = &buf_vec[..];
-
     let mut reader = Cursor::new(buf);
 
+    // 音声デバイス作成
     let host = cpal::default_host();
     let device = host.default_output_device().expect("failed to find a default output device");
     let config = device.default_output_config().unwrap();
     let sample_rate = config.sample_rate().0 as usize;
 
+    // cpu作成
     let bus = bus::Bus::new(&mut reader, sample_rate, 4000);
     let cpu = Arc::new(Mutex::new(cpu::Cpu::new(bus)));
 
+    // GUI生成
     let event_loop = EventLoop::new();
     let window_ = WindowBuilder::new()
         .with_title("My Game Boy")
@@ -90,6 +93,7 @@ async fn web_run() {
     
     let window = Rc::new(window_);
 
+    // Canvasをhtmlのbodyにappendする
     {
         use wasm_bindgen::JsCast;
         use winit::platform::web::WindowExtWebSys;
@@ -132,6 +136,7 @@ async fn web_run() {
         closure.forget();
     }
 
+    // 描画バックエンド(WebGPU)生成
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window.as_ref());
@@ -140,7 +145,7 @@ async fn web_run() {
             .expect("Pixels error")
     };
 
-    // 音声
+    // 音声設定
     let cpu_sound = cpu.clone();
     let channels = config.channels() as usize;
     let err_fn = |err: StreamError| eprintln!("an error occured in sound stream: {}", err);
@@ -150,12 +155,16 @@ async fn web_run() {
         SampleFormat::U16 => device.build_output_stream(&config.into(), move |data: &mut [u16], _: &cpal::OutputCallbackInfo| { write_data(data, channels, &cpu_sound) }, err_fn)
     }.unwrap();
     console::log_1(&JsValue::from_f64(channels as f64));
+
+    // cpuの実行
     let cpu_a = cpu.clone();
     wasm_bindgen_futures::spawn_local(cpu_run(cpu_a));
+
+    // 音声再生の開始
     stream.play().unwrap();
 
     let mut current_time = instant::Instant::now();
-    // 画面描画
+    // 画面描画ループ
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent { event, .. } => match event {
