@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style type="text/css">
+    body {
+      background-color: #000;
+      margin: 0;
+      overflow: hidden;
+    }
+  </style>
+  <title>Hello Pixels + GB</title>
+</head>
+
+<body>
+  <script type="module">
+    import init from "./game_boy_rust.js";
+    document.querySelector('#button1').addEventListener('click', () => {
+      init();
+    });
+  </script>
+  <script>
+    window.addEventListener('load', () => {
+      const f = document.getElementById('file1');
+      f.addEventListener('change', e => {
+        let input = e.target;
+        if (input.files.length == 0) {
+          return;
+        }
+        const file = input.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+          const b64_rom = btoa(reader.result);
+          localStorage.setItem('rom', b64_rom);
+        };
+
+        reader.readAsBinaryString(file);
+      });
+    });
+  </script>
+  <input type="file" id="file1" />
+  <button type="button" id="button1"> play! </button>
+</body>
+
+</html>

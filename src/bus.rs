@@ -1,4 +1,4 @@
-use std::{io::BufReader, fs::File};
+use std::{io::BufReader, fs::File, io::Read, io::Seek};
 
 use anyhow::{Result, bail};
 
@@ -20,7 +20,9 @@ pub struct Bus {
 }
 
 impl Bus {
-    pub fn new(reader: &mut BufReader<File>, sample_rate: usize) -> Self {
+    pub fn new<T>(reader: &mut T, sample_rate: usize, buffer_size: usize) -> Self 
+        where T: Read + Seek
+    {
         let rom = Rom::new(reader).unwrap();
         let rom_type = rom.cartridge_type;
         let rom_size = rom.rom_size;
@@ -66,7 +68,7 @@ impl Bus {
         };
 
         let ppu = Ppu::new();
-        let sound = Sound::new(sample_rate).unwrap();
+        let sound = Sound::new(sample_rate, buffer_size).unwrap();
 
         Self { 
             ram: [0; 0x8192],

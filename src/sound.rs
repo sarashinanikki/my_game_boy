@@ -717,7 +717,7 @@ pub struct Sound {
 }
 
 impl Sound {
-    pub fn new(sample_rate: usize) -> Result<Self> {
+    pub fn new(sample_rate: usize, buffer_size: usize) -> Result<Self> {
         let sound = Self { 
             ch1: Default::default(), 
             ch2: Default::default(), 
@@ -727,7 +727,7 @@ impl Sound {
             current_cycle: Default::default(),
             prev_bit: Default::default(),
             sound_control: Default::default(), 
-            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; 2000]),
+            sound_buffer: ring_buffer::Bounded::from(vec![[0.0, 0.0]; buffer_size]),
             sample_rate,
         };
 
