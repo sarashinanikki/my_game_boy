@@ -5,9 +5,65 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+optimize = ["log/release_max_level_warn"]
+web = ["wgpu/webgl"]
+default = ["optimize"]
+
 [dependencies]
 anyhow = "1.0.55"
 winit = "0.26.1"
 winit_input_helper = "0.12.0"
 pixels = "0.9.0"
 dotenvy = "0.15.1"
+dasp = { version = "0.11", features = ["all"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.82"
+wasm-bindgen-futures = "0.4.32"
+wgpu = "^0.12"
+gloo = "0.8.0"
+gloo-storage = "0.2.1"
+base64 = "0.13.0"
+js-sys = "0.3.59"
+instant = { version = "0.1.12", features = [ "stdweb" ] }
+cpal = { version = "0.13.5", features = ["wasm-bindgen"] }
+console_log = "0.2.0"
+console_error_panic_hook = "0.1.7"
+log = "0.4.17"
+[dependencies.web-sys]
+version = "^0.3.53"
+features = [
+  'Document',
+  'Element',
+  'HtmlElement',
+  'Node',
+  'Window',
+  'AudioContext',
+  'AudioDestinationNode',
+  'AudioNode',
+  'AudioParam',
+  'GainNode',
+  'OscillatorNode',
+  'OscillatorType',
+  'HtmlCanvasElement',
+  'console',
+  "AddEventListenerOptions",
+  'CssStyleDeclaration',
+  'BeforeUnloadEvent',
+  'DomRect',
+  'Event',
+  'EventTarget',
+  'FocusEvent',
+  'KeyboardEvent',
+  'MediaQueryList',
+  'MediaQueryListEvent',
+  'MouseEvent',
+  'PointerEvent',
+  'WheelEvent',
+  'GpuBuffer',
+  'GpuTextureFormat'
+]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cpal = "0.12"

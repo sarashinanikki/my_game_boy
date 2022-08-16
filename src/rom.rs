@@ -67,7 +67,9 @@ impl Default for Rom {
 }
 
 impl Rom {
-    pub fn new(reader: &mut BufReader<File>) -> Result<Rom> {
+    pub fn new<T>(reader: &mut T) -> Result<Rom> 
+        where T: Read + Seek,
+    {
         let mut rom: Rom = Default::default();
 
         // 0x100から読み込んでいく

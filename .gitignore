@@ -1,3 +1,5 @@
 /target
 /rom
 *.env
+save_file
+/wasm

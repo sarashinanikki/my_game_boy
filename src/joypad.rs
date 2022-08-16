@@ -32,32 +32,34 @@ impl Joypad {
 
     pub fn read(&self) -> u8 {
         if self.p15 && self.p14 {
-            return 0x3F;
+            return 0xFF;
         }
         
         // ボタンの状態を読み込む
         if !self.p15 {
-            let mut ret = 0x1F;
+            let mut ret = 0xDF;
             ret &= !((self.start as u8) << 3);
             ret &= !((self.select as u8) << 2);
             ret &= !((self.b as u8) << 1);
             ret &= !((self.a as u8) << 0);
 
+            // println!("Button = {ret:#08b}");
             return ret
         }
 
         // 十字キーの状態を読み込む
         if !self.p14 {
-            let mut ret = 0x2F;
+            let mut ret = 0xEF;
             ret &= !((self.down as u8) << 3);
             ret &= !((self.up as u8) << 2);
             ret &= !((self.left as u8) << 1);
             ret &= !((self.right as u8) << 0);
 
+            // println!("Direction = {ret:#08b}");
             return ret
         }
 
-        return 0x3F
+        return 0xFF
     }
 
     pub fn press(&mut self, button: Button) {
