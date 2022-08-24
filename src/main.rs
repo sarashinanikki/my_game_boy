@@ -21,9 +21,6 @@ use winit::window::WindowBuilder;
 use winit::dpi::LogicalSize;
 use pixels::{Pixels, SurfaceTexture};
 
-use log::{Level, info};
-use wasm_bindgen::prelude::*;
-
 mod rom;
 mod mbc;
 mod bus;
@@ -51,6 +48,9 @@ fn main() {
 
 #[cfg(target_arch = "wasm32")]
 async fn web_run() {
+    use log::{Level, info};
+    use wasm_bindgen::prelude::*;
+
     use std::io::Cursor;
     use gloo::storage::LocalStorage;
     use gloo_storage::Storage;
@@ -317,8 +317,6 @@ where T: cpal::Sample
 
 #[cfg(not(target_arch = "wasm32"))]
 fn run() {
-    use std::thread::sleep;
-
     dotenv().ok();
     let args: Vec<String> = env::args().collect();
     let rom_name = &args[1];
