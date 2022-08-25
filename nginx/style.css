@@ -4,3 +4,17 @@ body {
     overflow: hidden;
 }
 
+#file1 {
+    margin: 20px;
+    display: none;
+}
+
+label {
+    padding: 10px 40px;
+    color: white;
+    cursor: pointer;
+}
+
+#button1 {
+    color: white;
+}
