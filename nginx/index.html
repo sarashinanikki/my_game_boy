@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html lang="en">
+<html lang="ja">
 
 <head>
   <meta charset="UTF-8" />
@@ -21,15 +21,15 @@
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav">
           <li class="nav-item">
-            <a class="nav-link active" aria-current="page" href="#">Home</a>
+            <a class="nav-link active" aria-current="page" href="#">Game</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#">How to play</a>
+            <a class="nav-link" href="/how-to-play.html">How to play</a>
           </li>
         </ul>
         <form class="d-flex offset-lg-6 offset-xl-7 offset-xxl-8">
           <label>
-            <input type="file" id="file1" /> select ROM file
+            <input type="file" id="file1" /> Select ROM File
           </label>
           <button id="button1" type="button" class="btn btn-outline-secondary">Play</button>
         </form>
@@ -38,9 +38,13 @@
   </nav>
   
   <script type="module">
+    let runnnig = false;
     import init from "./game_boy_rust.js";
     document.querySelector('#button1').addEventListener('click', () => {
-      init();
+      if (!runnnig) {
+        init();
+        runnnig = true;
+      }
     });
   </script>
   <script>
