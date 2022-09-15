@@ -1,0 +1,29 @@
+body {
+    background-color: #000;
+    margin: 0;
+    color: gainsboro;
+}
+
+#player {
+    overflow: hidden;
+}
+
+.modal-content {
+    background-color: #444;
+}
+
+#file1 {
+    margin: 20px;
+    display: none;
+}
+
+label {
+    padding: 10px 40px;
+    color: white;
+    cursor: pointer;
+}
+
+#button1 {
+    color: white;
+    cursor: pointer;
+}

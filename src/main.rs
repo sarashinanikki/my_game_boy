@@ -19,10 +19,8 @@ use winit::event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCo
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit::dpi::LogicalSize;
+use serde::Serialize;
 use pixels::{Pixels, SurfaceTexture};
-
-use log::{Level, info};
-use wasm_bindgen::prelude::*;
 
 mod rom;
 mod mbc;
@@ -33,7 +31,7 @@ mod joypad;
 mod timer;
 mod sound;
 
-use joypad::Button;
+use joypad::{Button, KeyConfig};
 
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -51,11 +49,16 @@ fn main() {
 
 #[cfg(target_arch = "wasm32")]
 async fn web_run() {
+    use log::{Level, info};
+    use wasm_bindgen::prelude::*;
+
     use std::io::Cursor;
     use gloo::storage::LocalStorage;
     use gloo_storage::Storage;
     use gloo_storage::errors::StorageError;
     use base64::decode;
+
+    use serde::Serializer;
 
     // LocalStorageからROMデータを読み出す
     let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
@@ -66,6 +69,25 @@ async fn web_run() {
         None => {
             log::trace!("No ROM bin");
             return;
+        }
+    };
+
+    // LocalStorageからキーコンフィグ情報を読み出す
+    let key_config: KeyConfig = match local_storage.get_item("keyInfo").unwrap() {
+        Some(res) => {
+            serde_json::from_str(&res).unwrap()
+        },
+        None => {
+            KeyConfig {
+                RIGHT: "S".to_string(),
+                LEFT: "F".to_string(),
+                UP: "E".to_string(),
+                DOWN: "D".to_string(),
+                A: "K".to_string(),
+                B: "J".to_string(),
+                SELECT: "Space".to_string(),
+                START: "Return".to_string()
+            }
         }
     };
 
@@ -158,7 +180,7 @@ async fn web_run() {
 
     // cpuの実行
     let cpu_a = cpu.clone();
-    wasm_bindgen_futures::spawn_local(cpu_run(cpu_a));
+    wasm_bindgen_futures::spawn_local(run_cpu(cpu_a));
 
     // 音声再生の開始
     stream.play().unwrap();
@@ -180,72 +202,62 @@ async fn web_run() {
                             ..
                         },
                     ..
-                } => match virtual_code {
-                    VirtualKeyCode::E => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Up),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Up)
-                        }
-                    },
-                    VirtualKeyCode::D => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Down),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Down)
-                        }
-                    }
-                    VirtualKeyCode::S => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Left),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Left)
-                        }
-                    }
-                    VirtualKeyCode::F => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Right),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Right)
-                        }
-                    },
-                    VirtualKeyCode::J => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::B),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::B)
-                        }
-                    },
-                    VirtualKeyCode::K => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::A),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::A)
-                        }
-                    },
-                    VirtualKeyCode::Space => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Select),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Select)
-                        }
-                    },
-                    VirtualKeyCode::Return => {
-                        match button_state {
-                            ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Start),
-                            ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Start)
-                        }
-                    },
-                    VirtualKeyCode::N => {
-                        match button_state {
-                            ElementState::Pressed => {
-                                cpu.lock().unwrap().debug_flag ^= true;
+                } => {
+                    let key_code_input: String = virtual_code.serialize(serde_json::value::Serializer).unwrap().to_string();
+                    let input_len = key_code_input.len();
+
+                    if let Some(button) = key_config.find_key(&key_code_input[1..input_len-1]) {
+                        match button {
+                            Button::A => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::A),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::A)
+                                }
                             },
-                            ElementState::Released => {}
-                        }
-                    },
-                    VirtualKeyCode::M => {
-                        match button_state {
-                            ElementState::Pressed => {
-                                cpu.lock().unwrap().step_flag ^= true;
+                            Button::B => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::B),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::B)
+                                }
                             },
-                            ElementState::Released => {}
+                            Button::Down => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Down),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Down)
+                                }
+                            },
+                            Button::Left => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Left),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Left)
+                                }
+                            },
+                            Button::Right => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Right),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Right)
+                                }
+                            },
+                            Button::Select => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Select),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Select)
+                                }
+                            },
+                            Button::Start => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Start),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Start)
+                                }
+                            },
+                            Button::Up => {
+                                match button_state {
+                                    ElementState::Pressed => cpu.lock().unwrap().bus.joypad.press(Button::Up),
+                                    ElementState::Released => cpu.lock().unwrap().bus.joypad.release(Button::Up)
+                                }
+                            }
                         }
                     }
-                    _ => {}
                 },
                 WindowEvent::Resized(size) => {
                     pixels.resize_surface(size.width, size.height);
@@ -274,7 +286,7 @@ async fn web_run() {
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn cpu_run(cpu: Arc<Mutex<cpu::Cpu>>) {
+async fn run_cpu(cpu: Arc<Mutex<cpu::Cpu>>) {
     cpu.lock().unwrap().reset();
     cpu.lock().unwrap().bus.mbc.read_save_file().unwrap();
     loop {
@@ -288,6 +300,11 @@ async fn cpu_run(cpu: Arc<Mutex<cpu::Cpu>>) {
             sleep((wait_time / 1000) as i32).await;
         }
     };
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn match_input_key_config(config: KeyConfig, input: VirtualKeyCode) {
+    
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -317,8 +334,6 @@ where T: cpal::Sample
 
 #[cfg(not(target_arch = "wasm32"))]
 fn run() {
-    use std::thread::sleep;
-
     dotenv().ok();
     let args: Vec<String> = env::args().collect();
     let rom_name = &args[1];

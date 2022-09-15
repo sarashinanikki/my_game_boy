@@ -24,6 +24,36 @@ pub struct Joypad {
     pub int_flag: bool
 }
 
+#[cfg(target_arch = "wasm32")]
+use serde::{Serialize, Deserialize};
+#[derive(Serialize, Deserialize)]
+pub struct KeyConfig {
+    pub RIGHT: String,
+    pub LEFT: String,
+    pub UP: String,
+    pub DOWN: String,
+    pub A: String,
+    pub B: String,
+    pub SELECT: String,
+    pub START: String
+}
+
+#[cfg(target_arch = "wasm32")]
+impl KeyConfig {
+    pub fn find_key(&self, key: &str) -> Option<Button> {
+        if self.RIGHT.eq(key) { return Some(Button::Right); }
+        if self.LEFT.eq(key) { return Some(Button::Left); }
+        if self.UP.eq(key) { return Some(Button::Up); }
+        if self.DOWN.eq(key) { return Some(Button::Down); }
+        if self.A.eq(key) { return Some(Button::A); }
+        if self.B.eq(key) { return Some(Button::B); }
+        if self.SELECT.eq(key) { return Some(Button::Select); }
+        if self.START.eq(key) { return Some(Button::Start); }
+
+        None
+    }
+}
+
 impl Joypad {
     pub fn write(&mut self, data: u8) {
         self.p15 = data & (1 << 5) == (1 << 5);
