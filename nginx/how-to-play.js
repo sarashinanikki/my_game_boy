@@ -1,49 +1,26 @@
-const defalutKeyInfo = [
-  {
-    button: "UP",
-    key:    "E"
-  },
-  {
-    button: "DOWN",
-    key:    "D"
-  },
-  {
-    button: "LEFT",
-    key:    "S"
-  },
-  {
-    button: "RIGHT",
-    key:    "F"
-  },
-  {
-    button: "A",
-    key:    "K"
-  },
-  {
-    button: "B",
-    key:    "J"
-  },
-  {
-    button: "SELECT",
-    key:    "Space"
-  },
-  {
-    button: "START",
-    key:    "Enter"
-  }
-]
+const defalutKeyInfo = {
+  UP: "E",
+  DOWN: "D",
+  RIGHT: "S",
+  LEFT: "F",
+  A: "K",
+  B: "J",
+  SELECT: "Space",
+  START: "Return"
+}
 
 const keyInfoString = localStorage.getItem("keyInfo");
 console.log(keyInfoString);
 const keyInfo = keyInfoString != null ? JSON.parse(keyInfoString) : defalutKeyInfo;
 
 const makeKeyTable = (keyInfoArr) => {
-  const keyTableBody = keyInfoArr.map((el, idx) => {
+  console.log(keyInfoArr);
+  const keyTableBody = Object.keys(keyInfoArr).map((el) => {
     return (
       `<tr>
-        <td> ${el.button} </td>
-        <td> ${el.key}    </td>
-        <td align="right"> <button type="button" class="btn btn-secondary btn-sm" id="key-config-${idx}" data-bs-toggle="modal" data-bs-target="#keyModal"> 変更する </button> </td>
+        <td> ${el} </td>
+        <td> ${keyInfoArr[el]} </td>
+        <td align="right"> <button type="button" class="btn btn-secondary btn-sm" id="key-config-${el}" data-bs-toggle="modal" data-bs-target="#keyModal"> 変更する </button> </td>
       </tr>`
     )
   });
@@ -55,11 +32,12 @@ const tableElements = makeKeyTable(keyInfo);
 
 document.querySelector("tbody").innerHTML = tableElements;
 
-let selected = -1;
+let selected = "";
 
-keyInfo.forEach((_el, idx) => {
-  document.getElementById(`key-config-${idx}`).addEventListener('click', () => {
-    selected = idx;
+Object.keys(keyInfo).forEach((el) => {
+  document.getElementById(`key-config-${el}`).addEventListener('click', () => {
+    console.log(el);
+    selected = el;
   });
 })
 
@@ -74,32 +52,31 @@ let keyData = {
 
 window.addEventListener("keydown", (e) => {
   keyData.key = e.key;
-  keyData.code = e.code;
+  keyData.code = e.code.replace('Key', '').replace('Arrow', '').replace('Digit', 'Key').replace('Enter', 'Return').replace('Backspace', 'Back');
   keyData.onShift = e.shiftKey;
   keyData.onCtrl = e.ctrlKey;
   keyData.onAlt = e.altKey;
   keyData.onMeta = e.metaKey;
-  console.log(keyData.key);
 
-  document.getElementById('key-input').value = keyData.key;
+  document.getElementById('key-input').value = keyData.code;
 });
 
 document.getElementById("close-button").addEventListener('click', () => {
-  selected = -1;
+  selected = "";
 });
 
 document.getElementById("confirm-button").addEventListener('click', () => {
   console.log(selected);
-  if (selected >= 0) keyInfo[selected].key = keyData.key;
+  if (selected !== "") keyInfo[selected] = keyData.code;
   const tableElements = makeKeyTable(keyInfo);
   document.querySelector("tbody").innerHTML = tableElements;
-  keyInfo.forEach((_el, idx) => {
-    document.getElementById(`key-config-${idx}`).addEventListener('click', () => {
-      selected = idx;
+  Object.keys(keyInfo).forEach((el) => {
+    document.getElementById(`key-config-${el}`).addEventListener('click', () => {
+      selected = el;
     });
   })
 
   localStorage.setItem("keyInfo", JSON.stringify(keyInfo));
   document.getElementById('key-input').value = "";
-  selected = -1;
+  selected = "";
 });
