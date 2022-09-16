@@ -14,12 +14,10 @@ use dasp::{Frame, Sample, Signal};
 
 use dotenvy::dotenv;
 
-use web_sys::console;
 use winit::event::{Event, WindowEvent, KeyboardInput, ElementState, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit::dpi::LogicalSize;
-use serde::Serialize;
 use pixels::{Pixels, SurfaceTexture};
 
 mod rom;
@@ -31,7 +29,7 @@ mod joypad;
 mod timer;
 mod sound;
 
-use joypad::{Button, KeyConfig};
+use joypad::{Button};
 
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -57,8 +55,9 @@ async fn web_run() {
     use gloo_storage::Storage;
     use gloo_storage::errors::StorageError;
     use base64::decode;
-
-    use serde::Serializer;
+    use serde::{Serialize,Serializer};
+    use joypad::KeyConfig;
+    use web_sys::console;
 
     // LocalStorageからROMデータを読み出す
     let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
@@ -300,11 +299,6 @@ async fn run_cpu(cpu: Arc<Mutex<cpu::Cpu>>) {
             sleep((wait_time / 1000) as i32).await;
         }
     };
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn match_input_key_config(config: KeyConfig, input: VirtualKeyCode) {
-    
 }
 
 #[cfg(target_arch = "wasm32")]

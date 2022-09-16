@@ -26,6 +26,7 @@ pub struct Joypad {
 
 #[cfg(target_arch = "wasm32")]
 use serde::{Serialize, Deserialize};
+#[cfg(target_arch = "wasm32")]
 #[derive(Serialize, Deserialize)]
 pub struct KeyConfig {
     pub RIGHT: String,
