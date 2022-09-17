@@ -634,13 +634,14 @@ impl Ch4 {
         if self.frequency_timer == 0 {
             // divisor codeは事前に変換しておく
             self.frequency_timer = (self.divisor as u16) << (self.shift_amount as u16);
-            let xor_result = ((self.lfsr & 1) > 0) ^ ((self.lfsr & 2) > 0);
-            self.lfsr = (self.lfsr >> 1) | ((xor_result as u16) << 14);
+            let xor_result = ((self.lfsr & 0b01) > 0) ^ ((self.lfsr & 0b10) > 0);
 
-            if self.counter_width {
-                self.lfsr &= !(1 << 6);
-                self.lfsr |= (xor_result as u16) << 6
+            self.lfsr = if self.counter_width {
+                ((self.lfsr >> 1) & !(1 << 6)) | ((xor_result as u16) << 6)
             }
+            else {
+                (self.lfsr >> 1) | ((xor_result as u16) << 14)
+            };
         }
     }
 
@@ -684,9 +685,9 @@ impl Ch4 {
             return 0;
         }
 
-        let dac_input = ((self.lfsr & 0x01) ^ 0x01) as i16;
+        let dac_input = ((self.lfsr & 1) ^ 1) as i16;
         let dac_output = match dac_input {
-            0 => (self.volume as i16) * -1,
+            0 => 0,
             _ => self.volume as i16
         };
         return dac_output
